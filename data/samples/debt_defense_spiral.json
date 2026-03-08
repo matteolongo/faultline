@@ -1,0 +1,88 @@
+{
+  "scenario_id": "debt_defense_spiral",
+  "title": "Debt-funded financial defense loses ground to modular settlement rails",
+  "news": [
+    {
+      "id": "news-1",
+      "source": "news",
+      "timestamp": "2026-01-10T07:30:00Z",
+      "signal_type": "finance",
+      "title": "Republic Treasury rolls more short-term debt to defend its banking corridor",
+      "summary": "Officials rely on refinancing and emergency guarantees to preserve confidence in state-linked lenders.",
+      "entities": ["Republic Treasury", "National Funding Bank"],
+      "region": "Frontier Europe",
+      "tags": ["debt", "refinancing", "treasury", "incumbent", "balance-sheet-stress"],
+      "confidence": 0.83,
+      "payload": {"provider": "sample_news"}
+    },
+    {
+      "id": "news-2",
+      "source": "news",
+      "timestamp": "2026-01-11T12:00:00Z",
+      "signal_type": "finance",
+      "title": "Merchants adopt a stablecoin settlement cooperative to avoid payment delays",
+      "summary": "The new rail avoids bank funding friction and removes part of the incumbent balance-sheet bottleneck.",
+      "entities": ["Merchant Settlement Cooperative", "National Funding Bank"],
+      "region": "Frontier Europe",
+      "tags": ["stablecoin", "payment-rail", "settlement", "asset-light", "distributed-pressure"],
+      "confidence": 0.79,
+      "payload": {"provider": "sample_news"}
+    }
+  ],
+  "market": [
+    {
+      "id": "market-1",
+      "source": "market",
+      "timestamp": "2026-01-12T16:00:00Z",
+      "signal_type": "market",
+      "title": "Funding spreads widen for lenders reliant on treasury support",
+      "summary": "Balance-sheet defense is becoming more expensive just as modular payment alternatives gain user trust.",
+      "entities": ["National Funding Bank"],
+      "region": "Frontier Europe",
+      "tags": ["funding-stress", "spread-widening", "market-stress", "debt", "capital-flight"],
+      "confidence": 0.77,
+      "payload": {"provider": "sample_market"}
+    },
+    {
+      "id": "market-2",
+      "source": "market",
+      "timestamp": "2026-01-13T10:30:00Z",
+      "signal_type": "market",
+      "title": "Treasury bill demand shortens while collateral software vendors see onboarding demand",
+      "summary": "Users prefer optionality and cleaner settlement over longer exposure to policy defense reflexes.",
+      "entities": ["Collateral Mesh Systems"],
+      "region": "Frontier Europe",
+      "tags": ["settlement", "collateral", "software", "market-stress", "payment-rail"],
+      "confidence": 0.74,
+      "payload": {"provider": "sample_market"}
+    }
+  ],
+  "dark": [
+    {
+      "id": "dark-1",
+      "source": "dark",
+      "timestamp": "2026-01-12T21:00:00Z",
+      "signal_type": "anomaly",
+      "title": "Informal dealer channels report faster merchant migration than official volumes imply",
+      "summary": "The gray edge is adapting more quickly than the regulated core can track in real time.",
+      "entities": ["Merchant Settlement Cooperative", "Informal dealer network"],
+      "region": "Frontier Europe",
+      "tags": ["gray-market", "informal-network", "capital-controls", "sentiment-entropy", "payment-rail"],
+      "confidence": 0.65,
+      "payload": {"provider": "sample_dark"}
+    },
+    {
+      "id": "dark-2",
+      "source": "dark",
+      "timestamp": "2026-01-13T22:30:00Z",
+      "signal_type": "sentiment",
+      "title": "Treasury-linked banks see rising account churn chatter among export-heavy firms",
+      "summary": "Private discussions point to trust erosion and concern that the state must spend more just to defend the same deposit base.",
+      "entities": ["Republic Treasury", "Exporters guild"],
+      "region": "Frontier Europe",
+      "tags": ["social-fragmentation", "capital-flight", "debt", "balance-sheet-stress", "distrust"],
+      "confidence": 0.67,
+      "payload": {"provider": "sample_dark"}
+    }
+  ]
+}

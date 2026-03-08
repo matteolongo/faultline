@@ -1,0 +1,88 @@
+{
+  "scenario_id": "arctic_cable_bypass",
+  "title": "Arctic cable bypass pressures legacy route control",
+  "news": [
+    {
+      "id": "news-1",
+      "source": "news",
+      "timestamp": "2026-03-01T08:00:00Z",
+      "signal_type": "geopolitical",
+      "title": "Northern Cable Consortium delays repairs after Baltic undersea sabotage",
+      "summary": "Repair windows widen and carriers admit the legacy corridor remains exposed to repeat low-cost disruptions.",
+      "entities": ["Northern Cable Consortium", "Baltic Carrier Alliance"],
+      "region": "Arctic",
+      "tags": ["undersea", "cable", "chokepoint", "sabotage", "repair-delay", "carrier"],
+      "confidence": 0.81,
+      "payload": {"provider": "sample_news"}
+    },
+    {
+      "id": "news-2",
+      "source": "news",
+      "timestamp": "2026-03-02T09:30:00Z",
+      "signal_type": "infrastructure",
+      "title": "Arctic Mesh Builders announce financing for a bypass route north of the legacy corridor",
+      "summary": "The alternate route needs far less capital than defending the full incumbent path and promises software-defined rerouting.",
+      "entities": ["Arctic Mesh Builders", "Northern Cable Consortium"],
+      "region": "Arctic",
+      "tags": ["bypass", "routing", "arctic", "distributed-pressure", "logistics", "monitoring"],
+      "confidence": 0.78,
+      "payload": {"provider": "sample_news"}
+    }
+  ],
+  "market": [
+    {
+      "id": "market-1",
+      "source": "market",
+      "timestamp": "2026-03-02T13:15:00Z",
+      "signal_type": "market",
+      "title": "Marine insurance spreads widen for cable-intensive Arctic routes",
+      "summary": "Insurers now price repeat disruption risk rather than a one-off accident profile.",
+      "entities": ["Nordic Marine Underwriters"],
+      "region": "Arctic",
+      "tags": ["insurance", "spread-widening", "market-stress", "logistics", "undersea"],
+      "confidence": 0.74,
+      "payload": {"provider": "sample_market"}
+    },
+    {
+      "id": "market-2",
+      "source": "market",
+      "timestamp": "2026-03-03T15:00:00Z",
+      "signal_type": "market",
+      "title": "Orders rise for network monitoring software tied to redundant route management",
+      "summary": "Buyers prefer visibility and rerouting tooling over more spending on static perimeter defense.",
+      "entities": ["RouteSense Software"],
+      "region": "Arctic",
+      "tags": ["monitoring", "resilience", "bypass", "software", "market-stress"],
+      "confidence": 0.72,
+      "payload": {"provider": "sample_market"}
+    }
+  ],
+  "dark": [
+    {
+      "id": "dark-1",
+      "source": "dark",
+      "timestamp": "2026-03-01T20:00:00Z",
+      "signal_type": "anomaly",
+      "title": "Ship-tracking anomalies cluster near incumbent repair lanes",
+      "summary": "AIS gaps appear repeatedly near the same repair corridor, suggesting the route remains easy to probe.",
+      "entities": ["Baltic Carrier Alliance"],
+      "region": "Arctic",
+      "tags": ["anomaly", "undersea", "chokepoint", "distributed-pressure", "sentiment-entropy"],
+      "confidence": 0.66,
+      "payload": {"provider": "sample_dark"}
+    },
+    {
+      "id": "dark-2",
+      "source": "dark",
+      "timestamp": "2026-03-03T19:00:00Z",
+      "signal_type": "social",
+      "title": "Carrier engineers discuss mesh rerouting playbooks in closed operator channels",
+      "summary": "Operators increasingly talk about bypass survivability instead of full restoration of the legacy path.",
+      "entities": ["Arctic Mesh Builders", "Carrier engineers collective"],
+      "region": "Arctic",
+      "tags": ["bypass", "social-fragmentation", "routing", "monitoring", "resilience"],
+      "confidence": 0.63,
+      "payload": {"provider": "sample_dark"}
+    }
+  ]
+}

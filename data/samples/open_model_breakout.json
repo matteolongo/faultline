@@ -1,0 +1,88 @@
+{
+  "scenario_id": "open_model_breakout",
+  "title": "Open model ecosystem pressures bundled AI incumbents",
+  "news": [
+    {
+      "id": "news-1",
+      "source": "news",
+      "timestamp": "2026-02-20T10:00:00Z",
+      "signal_type": "technology",
+      "title": "Open Weights Collective releases a model stack that rivals premium closed assistants on core benchmarks",
+      "summary": "The release is modular, rapidly forked, and good enough to anchor downstream developer workflows.",
+      "entities": ["Open Weights Collective", "Enterprise Cloud Suite"],
+      "region": "Global",
+      "tags": ["open-source", "ai", "model", "protocol", "developer-flight", "commoditization"],
+      "confidence": 0.82,
+      "payload": {"provider": "sample_news"}
+    },
+    {
+      "id": "news-2",
+      "source": "news",
+      "timestamp": "2026-02-21T11:30:00Z",
+      "signal_type": "technology",
+      "title": "Enterprise Cloud Suite discounts its AI bundle to defend seat retention",
+      "summary": "The incumbent is forced to defend premium pricing across a broad product surface instead of one narrow feature set.",
+      "entities": ["Enterprise Cloud Suite"],
+      "region": "Global",
+      "tags": ["margin-pressure", "incumbent", "pricing-power", "cloud", "bundled-suite"],
+      "confidence": 0.79,
+      "payload": {"provider": "sample_news"}
+    }
+  ],
+  "market": [
+    {
+      "id": "market-1",
+      "source": "market",
+      "timestamp": "2026-02-22T14:00:00Z",
+      "signal_type": "market",
+      "title": "GPU optimization and orchestration vendors see rising enterprise trial activity",
+      "summary": "Buyers appear to be separating model choice from workflow tooling and infrastructure control.",
+      "entities": ["Stack Orchestrator Inc."],
+      "region": "Global",
+      "tags": ["developer-tools", "interoperability", "market-stress", "protocol", "software"],
+      "confidence": 0.75,
+      "payload": {"provider": "sample_market"}
+    },
+    {
+      "id": "market-2",
+      "source": "market",
+      "timestamp": "2026-02-23T13:00:00Z",
+      "signal_type": "market",
+      "title": "Cloud spend guidance softens for vendors tied to premium AI attach rates",
+      "summary": "Higher usage does not translate cleanly into premium bundle monetization once open alternatives set the ceiling.",
+      "entities": ["Enterprise Cloud Suite"],
+      "region": "Global",
+      "tags": ["cloud-spend", "market-stress", "margin-pressure", "ai"],
+      "confidence": 0.71,
+      "payload": {"provider": "sample_market"}
+    }
+  ],
+  "dark": [
+    {
+      "id": "dark-1",
+      "source": "dark",
+      "timestamp": "2026-02-22T19:00:00Z",
+      "signal_type": "developer",
+      "title": "Private engineering forums show rapid plugin ecosystem growth around the open stack",
+      "summary": "The most active experimentation is happening outside the incumbent roadmap and procurement cycle.",
+      "entities": ["Open Weights Collective", "Plugin Builder Network"],
+      "region": "Global",
+      "tags": ["developer-flight", "protocol", "open-source", "social-fragmentation", "plugin-ecosystem"],
+      "confidence": 0.68,
+      "payload": {"provider": "sample_dark"}
+    },
+    {
+      "id": "dark-2",
+      "source": "dark",
+      "timestamp": "2026-02-24T09:00:00Z",
+      "signal_type": "sentiment",
+      "title": "Enterprise buyers increasingly ask for model portability clauses in procurement drafts",
+      "summary": "Customers want a way out of single-vendor dependence if open performance improves further.",
+      "entities": ["Enterprise buyers coalition", "Enterprise Cloud Suite"],
+      "region": "Global",
+      "tags": ["procurement", "protocol", "portability", "sentiment-entropy", "developer-tools"],
+      "confidence": 0.64,
+      "payload": {"provider": "sample_dark"}
+    }
+  ]
+}

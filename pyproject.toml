@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "strategic-swarm-agent"
+version = "0.1.0"
+description = "Structural fragility and asymmetric disruption reasoning engine."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Codex" }
+]
+dependencies = [
+  "langgraph>=0.2.50",
+  "pydantic>=2.9.0",
+  "PyYAML>=6.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+]
+
+[project.scripts]
+strategic-swarm-agent = "strategic_swarm_agent.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/strategic_swarm_agent"]
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src",
+]
+testpaths = [
+  "tests",
+]
