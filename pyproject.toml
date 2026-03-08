@@ -24,6 +24,11 @@ dependencies = [
 dev = [
   "pytest>=8.3.0",
 ]
+operator = [
+  "ipykernel>=6.29.5",
+  "jupyterlab>=4.4.0",
+  "streamlit>=1.42.0",
+]
 
 [project.scripts]
 strategic-swarm-agent = "strategic_swarm_agent.__main__:main"

@@ -101,6 +101,32 @@ python3 -m strategic_swarm_agent provider-health
 python3 -m strategic_swarm_agent evaluate-goldset
 ```
 
+## Operator Surfaces
+
+The recommended first operator surface is the notebook at [strategic_swarm_operator_surface.ipynb](/Users/matteo.longo/projects/streategic_swarm_agent/notebooks/strategic_swarm_operator_surface.ipynb). It is the clearest way to run demo, live, latest-window, and replay flows while inspecting provider health, recent signals, and the rendered report inline.
+
+Install the operator extras:
+
+```bash
+pip install -e '.[dev,operator]'
+```
+
+Launch Jupyter:
+
+```bash
+jupyter lab notebooks/strategic_swarm_operator_surface.ipynb
+```
+
+There is also a thin Streamlit wrapper over the same runner API:
+
+```bash
+streamlit run src/strategic_swarm_agent/operator_app.py
+```
+
+The notebook is the recommended operator surface. The Streamlit app is a small convenience wrapper over the same execution path.
+
+For live mode you will need `NEWSAPI_API_KEY`, `ALPHAVANTAGE_API_KEY`, and `FRED_API_KEY`. If keys are missing, live/provider-health flows stay non-crashing and the demo/replay paths remain fully usable.
+
 ## Live source configuration
 
 Live provider defaults live in [providers.yaml](/Users/matteo.longo/projects/streategic_swarm_agent/configs/providers.yaml). The defaults are intentionally small and opinionated:
