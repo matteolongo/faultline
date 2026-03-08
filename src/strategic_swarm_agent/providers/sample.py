@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from strategic_swarm_agent.models import RawSignal
@@ -21,7 +22,8 @@ class SampleScenarioRepository:
 
 
 class SampleProvider(SignalProvider):
-    source_name = "sample"
+    provider_name = "sample"
+    source_family = "sample"
     source_key: str
 
     def __init__(self, repository: SampleScenarioRepository | None = None) -> None:
@@ -32,17 +34,23 @@ class SampleProvider(SignalProvider):
         records = payload.get(self.source_key, [])
         return [RawSignal.model_validate(record) for record in records]
 
+    def fetch_window(self, start_at: datetime, end_at: datetime) -> list[RawSignal]:
+        raise NotImplementedError("Sample providers are scenario-based only. Use fetch(scenario_id).")
+
 
 class NewsSignalProvider(SampleProvider):
-    source_name = "news"
+    provider_name = "sample-news"
+    source_family = "news"
     source_key = "news"
 
 
 class MarketContextProvider(SampleProvider):
-    source_name = "market"
+    provider_name = "sample-market"
+    source_family = "market"
     source_key = "market"
 
 
 class DarkSignalProvider(SampleProvider):
-    source_name = "dark"
+    provider_name = "sample-dark"
+    source_family = "alt"
     source_key = "dark"

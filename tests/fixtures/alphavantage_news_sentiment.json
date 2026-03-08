@@ -1,0 +1,18 @@
+{
+  "items": "1",
+  "feed": [
+    {
+      "title": "Open model providers pressure AI bundle pricing",
+      "url": "https://example.com/markets/open-model-pricing",
+      "time_published": "20260305T091500",
+      "summary": "Market participants expect lower attach rates for premium AI bundles.",
+      "source": "Market Wire",
+      "topics": [
+        {"topic": "technology", "relevance_score": "0.87"}
+      ],
+      "ticker_sentiment": [
+        {"ticker": "MSFT", "relevance_score": "0.66"}
+      ]
+    }
+  ]
+}

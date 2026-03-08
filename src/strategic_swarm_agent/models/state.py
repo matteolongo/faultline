@@ -4,9 +4,11 @@ from typing import Any, TypedDict
 
 from strategic_swarm_agent.models.contracts import (
     AbstractPattern,
+    EventCluster,
     FinalReport,
     FragilityAssessment,
     OpportunityIdea,
+    ProviderHealthStatus,
     RawSignal,
     ReviewedOpportunity,
     RippleScenario,
@@ -17,8 +19,13 @@ from strategic_swarm_agent.models.contracts import (
 
 class SwarmGraphState(TypedDict, total=False):
     scenario_id: str
+    run_mode: str
+    window_start: str
+    window_end: str
     raw_signals: list[RawSignal]
     normalized_events: list[SignalEvent]
+    event_clusters: list[EventCluster]
+    selected_cluster: EventCluster | None
     abstract_patterns: list[AbstractPattern]
     signal_bundles: list[SignalBundle]
     fragility_assessments: list[FragilityAssessment]
@@ -28,5 +35,6 @@ class SwarmGraphState(TypedDict, total=False):
     final_report: FinalReport | None
     diagnostics: dict[str, Any]
     provenance: list[str]
+    provider_health: list[ProviderHealthStatus]
     opportunity_retry_count: int
     max_opportunity_retries: int

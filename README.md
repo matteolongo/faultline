@@ -1,6 +1,6 @@
 # Strategic Swarm Agent
 
-Strategic Swarm Agent is an MVP reasoning engine for structural fragility analysis. It takes a small cluster of heterogeneous signals, abstracts them into an `Empire vs Disruptor` topology, scores fragility and asymmetry, builds ripple scenarios, and surfaces only higher-convexity opportunity ideas with explicit invalidation logic.
+Strategic Swarm Agent is a structural fragility reasoning engine. It ingests heterogeneous live signals, clusters them into structural stories, abstracts them into an `Empire vs Disruptor` topology, scores fragility and asymmetry, builds ripple scenarios, and surfaces only higher-convexity opportunity ideas with explicit invalidation logic.
 
 The design goal is not headline summarization. The system is built to answer:
 
@@ -10,17 +10,19 @@ The design goal is not headline summarization. The system is built to answer:
 - Which systems become antifragile?
 - Is there an indirect, nonlinear execution thesis worth surfacing?
 
-## MVP capabilities
+## Current capabilities
 
-- Modular provider layer with three demo providers: news, market context, and dark signals
+- Modular provider layer with sample providers plus live adapters for NewsAPI, Alpha Vantage, FRED, and GDELT
 - Typed contracts with `pydantic`
 - Versioned archetype knowledge base in YAML
-- Deterministic fragility and convexity heuristics
+- Deterministic normalization, dedupe, clustering, and fragility heuristics
+- Hybrid reasoning pipeline with optional structured LLM refinement for Pattern Matcher, Signal Alchemist, Ripple Architect, and synthesis
+- SQLite or PostgreSQL-backed persistence for raw signals, normalized events, clusters, runs, reports, and dead letters
 - Four sub-agent style nodes orchestrated in `langgraph`
-- Explainable final report with provenance and invalidation logic
+- Explainable final report with provenance, invalidation logic, and `monitor_only` gating
 - Three end-to-end demo scenarios
 - JSON and Markdown output export
-- SQLite persistence for replay and debugging
+- Replay, backfill, provider health, and signal listing CLI workflows
 
 ## Repository layout
 
@@ -69,12 +71,17 @@ pytest
 
 ## Environment
 
-Environment variables are intentionally minimal for the MVP:
+Core environment variables:
 
 - `SWARM_OUTPUT_DIR`: output folder for reports and traces. Defaults to `outputs/`.
-- `SWARM_RUN_DB`: SQLite path for persisted runs. Defaults to `outputs/swarm_runs.sqlite`.
+- `SWARM_DATABASE_URL`: persistence database URL or local SQLite path. Defaults to `outputs/swarm_runs.sqlite`.
 - `SWARM_LOG_LEVEL`: logging level. Defaults to `INFO`.
-- `OPENAI_API_KEY`: optional and unused by default. Reserved for future LLM-backed node upgrades.
+- `SWARM_PROVIDER_TIMEOUT`: provider timeout in seconds.
+- `SWARM_DEFAULT_LOOKBACK_MINUTES`: default window for `run-latest`.
+- `NEWSAPI_API_KEY`: required for NewsAPI live ingestion.
+- `ALPHAVANTAGE_API_KEY`: required for Alpha Vantage live ingestion.
+- `FRED_API_KEY`: required for FRED live ingestion.
+- `OPENAI_API_KEY`: optional. Enables structured refinement for the LLM-backed nodes.
 
 See [.env.example](/Users/matteo.longo/projects/streategic_swarm_agent/.env.example).
 
@@ -82,18 +89,48 @@ See [.env.example](/Users/matteo.longo/projects/streategic_swarm_agent/.env.exam
 
 ```bash
 python3 -m strategic_swarm_agent run-demo --scenario debt_defense_spiral
-python3 -m strategic_swarm_agent run-demo --scenario regional_microgrid_shock --output-dir outputs/custom
 python3 -m strategic_swarm_agent run-all-demos
 python3 -m strategic_swarm_agent evaluate --scenario arctic_cable_bypass
+python3 -m strategic_swarm_agent run-latest --lookback-minutes 60
+python3 -m strategic_swarm_agent run-live --start 2026-03-08T10:00:00Z --end 2026-03-08T11:00:00Z
+python3 -m strategic_swarm_agent ingest-window --start 2026-03-08T10:00:00Z --end 2026-03-08T11:00:00Z
+python3 -m strategic_swarm_agent backfill --start 2026-03-01T00:00:00Z --end 2026-03-02T00:00:00Z --step-minutes 60
+python3 -m strategic_swarm_agent replay --run-id <previous-run-id>
+python3 -m strategic_swarm_agent list-signals --limit 20
+python3 -m strategic_swarm_agent provider-health
+python3 -m strategic_swarm_agent evaluate-goldset
 ```
+
+## Live source configuration
+
+Live provider defaults live in [providers.yaml](/Users/matteo.longo/projects/streategic_swarm_agent/configs/providers.yaml). The defaults are intentionally small and opinionated:
+
+- News discovery through NewsAPI `everything` plus `top-headlines`
+- Market and sentiment context through Alpha Vantage news sentiment and global quotes
+- Macro updates through FRED `series/updates` and `series/observations`
+- Alternative structural event pressure through GDELT DOC
+
+The ingestion contract is window-based: each provider implements `fetch_window(start_at, end_at) -> list[RawSignal]`.
+
+## Persistence and replay
+
+The runtime persists:
+
+- raw signals
+- normalized signals
+- event clusters
+- runs
+- published reports
+- dead-letter fetch failures
+
+Replay rebuilds a report from stored raw signals without refetching the internet. For solo-workstation use, SQLite is the default. PostgreSQL is also supported through `SWARM_DATABASE_URL`.
 
 ## What is intentionally excluded
 
-- Live internet ingestion
 - Real-time trading or execution
 - Portfolio management
 - Backtesting
 - Large-scale data engineering
 - Broad external integrations
 
-The MVP optimizes for traceable structural reasoning, modularity, and replayability.
+The system optimizes for traceable structural reasoning, modularity, replayability, and operator-grade unattended research workflows.

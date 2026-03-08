@@ -1,0 +1,13 @@
+{
+  "realtime_start": "2026-03-05",
+  "realtime_end": "2026-03-05",
+  "seriess": [
+    {
+      "id": "DGS10",
+      "title": "Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity",
+      "notes": "Treasury yield series.",
+      "frequency": "Daily",
+      "units": "Percent"
+    }
+  ]
+}

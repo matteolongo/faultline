@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from strategic_swarm_agent.models import OpportunityIdea, ReviewedOpportunity
+from strategic_swarm_agent.models import EventCluster, OpportunityIdea, ReviewedOpportunity
 from strategic_swarm_agent.utils.config import load_scoring_config
 
 
@@ -10,7 +10,7 @@ class ExecutionCritic:
         self.weak_convexity = scoring["thresholds"]["weak_convexity"]
         self.crowded_trade = scoring["thresholds"]["crowded_trade"]
 
-    def review(self, ideas: list[OpportunityIdea]) -> list[ReviewedOpportunity]:
+    def review(self, ideas: list[OpportunityIdea], cluster: EventCluster) -> list[ReviewedOpportunity]:
         reviewed = []
         for idea in ideas:
             rejection_reasons = []
@@ -20,6 +20,8 @@ class ExecutionCritic:
                 rejection_reasons.append("The expression looks too crowded or too obvious.")
             if idea.directness == "direct":
                 rejection_reasons.append("Direct headline exposure is usually too linear for this system.")
+            if len(cluster.source_families) < 2:
+                rejection_reasons.append("Cross-source agreement is too weak to surface an execution thesis.")
             approved = not rejection_reasons
             summary = (
                 "Approved because it captures indirect nonlinear upside with explicit invalidation."

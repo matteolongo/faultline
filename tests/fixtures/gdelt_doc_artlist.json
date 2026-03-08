@@ -1,0 +1,12 @@
+{
+  "articles": [
+    {
+      "url": "https://example.com/gdelt/cable-sabotage",
+      "title": "Arctic route operators discuss bypass options after sabotage concerns",
+      "seendate": "2026-03-05T08:45:00Z",
+      "domain": "example.com",
+      "sourcecountry": "NO",
+      "language": "English"
+    }
+  ]
+}

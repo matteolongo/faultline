@@ -47,3 +47,8 @@ def load_scoring_config() -> dict[str, Any]:
 @lru_cache(maxsize=1)
 def load_prompts() -> dict[str, str]:
     return load_yaml_config("prompts.yaml")
+
+
+@lru_cache(maxsize=1)
+def load_provider_config() -> dict[str, Any]:
+    return load_yaml_config("providers.yaml")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from strategic_swarm_agent.models import AbstractPattern, FragilityAssessment, ScoreDetail, SignalBundle, SignalEvent
+from strategic_swarm_agent.models import AbstractPattern, EventCluster, FragilityAssessment, ScoreDetail, SignalBundle, SignalEvent
 from strategic_swarm_agent.utils.config import load_archetypes, load_scoring_config
 
 HIGH_DEFENSE_TAGS = {"chokepoint", "grid", "debt", "undersea", "compliance", "carrier", "cloud"}
@@ -16,6 +16,7 @@ class FragilityScorer:
     def score(
         self,
         events: list[SignalEvent],
+        cluster: EventCluster,
         patterns: list[AbstractPattern],
         bundles: list[SignalBundle],
     ) -> list[FragilityAssessment]:
@@ -51,6 +52,7 @@ class FragilityScorer:
             0.25 + 0.1 * len(tags.intersection(ANTIFRAGILE_TAGS)) + (bundle.sentiment_entropy.value * 0.12 if bundle else 0.0)
         )
         weights = self.scoring["weights"]
+        tag_pressure = sum(self.scoring["tag_weights"].get(tag, 0.0) for tag in tags)
         fragility_value = self._bounded(
             hubris_value * weights["hubris_index"]
             + energy_defense_value * weights["energy_defense_ratio"]
@@ -58,6 +60,8 @@ class FragilityScorer:
             + centralization_value * weights["centralization_score"]
             + (1 - redundancy_value) * weights["redundancy_penalty"]
             + antifragility_value * weights["antifragility_attraction"]
+            + min(0.18, tag_pressure * 0.18)
+            + cluster.agreement_score * 0.08
         )
 
         fragility_patterns = [
@@ -101,6 +105,7 @@ class FragilityScorer:
                 notes=[
                     f"Detected fragility patterns: {', '.join(fragility_patterns[:4]) or 'none explicit'}.",
                     f"Pattern driver: {patterns[0].pattern_name}.",
+                    f"Cluster agreement score: {cluster.agreement_score:.2f}.",
                 ],
                 fragile_nodes=fragile_nodes,
                 antifragile_nodes=antifragile_nodes,

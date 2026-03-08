@@ -1,18 +1,25 @@
 from __future__ import annotations
 
-from strategic_swarm_agent.models import AbstractPattern, FragilityAssessment, RippleScenario, SignalBundle, SignalEvent
+from strategic_swarm_agent.llm.backend import StructuredReasoner
+from strategic_swarm_agent.models import AbstractPattern, EventCluster, FragilityAssessment, RippleScenario, SignalBundle, SignalEvent
+from strategic_swarm_agent.utils.config import load_prompts
 
 
 class RippleArchitect:
+    def __init__(self, reasoner: StructuredReasoner | None = None) -> None:
+        self.reasoner = reasoner or StructuredReasoner()
+        self.prompts = load_prompts()
+
     def build(
         self,
         events: list[SignalEvent],
+        cluster: EventCluster,
         patterns: list[AbstractPattern],
         fragility: list[FragilityAssessment],
         bundles: list[SignalBundle],
-    ) -> list[RippleScenario]:
+    ) -> tuple[list[RippleScenario], dict]:
         if not events or not patterns or not fragility:
-            return []
+            return [], {"llm_used": False, "llm_status": "empty"}
 
         pattern = patterns[0]
         assessment = fragility[0]
@@ -87,18 +94,29 @@ class RippleArchitect:
         if bundle and bundle.sentiment_entropy.value > 0.55:
             third_order.append("Social and narrative fragmentation keep the shock alive longer than a single event window.")
 
-        return [
-            RippleScenario(
-                trigger=trigger,
-                first_order=first_order,
-                second_order=second_order,
-                third_order=third_order,
-                sectors_helped=helped,
-                sectors_hurt=hurt,
-                capital_rotation=rotation,
-                fragile_nodes=assessment.fragile_nodes,
-                antifragile_nodes=assessment.antifragile_nodes,
-                time_horizon="3 to 18 months",
-                confidence=min(0.92, 0.45 + assessment.fragility_score.value * 0.4),
-            )
-        ]
+        fallback = RippleScenario(
+            trigger=trigger,
+            first_order=first_order,
+            second_order=second_order,
+            third_order=third_order,
+            sectors_helped=helped,
+            sectors_hurt=hurt,
+            capital_rotation=rotation,
+            fragile_nodes=assessment.fragile_nodes,
+            antifragile_nodes=assessment.antifragile_nodes,
+            time_horizon="3 to 18 months",
+            confidence=min(0.92, 0.45 + assessment.fragility_score.value * 0.4),
+        )
+        refined, llm_diag = self.reasoner.refine_model(
+            system_prompt=self.prompts["ripple_architect"],
+            user_payload={
+                "cluster": cluster.model_dump(mode="json"),
+                "pattern": patterns[0].model_dump(mode="json"),
+                "fragility": fragility[0].model_dump(mode="json"),
+                "bundle": bundles[0].model_dump(mode="json") if bundles else None,
+                "fallback": fallback.model_dump(mode="json"),
+            },
+            model_class=RippleScenario,
+            fallback=fallback,
+        )
+        return [refined], llm_diag

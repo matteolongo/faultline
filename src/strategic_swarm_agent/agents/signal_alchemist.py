@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from strategic_swarm_agent.models import ScoreDetail, SignalBundle, SignalEvent
+from strategic_swarm_agent.llm.backend import StructuredReasoner
+from strategic_swarm_agent.models import EventCluster, ScoreDetail, SignalBundle, SignalEvent
+from strategic_swarm_agent.utils.config import load_prompts
 
 
 class SignalAlchemist:
-    def enrich(self, events: list[SignalEvent], scenario_id: str) -> list[SignalBundle]:
+    def __init__(self, reasoner: StructuredReasoner | None = None) -> None:
+        self.reasoner = reasoner or StructuredReasoner()
+        self.prompts = load_prompts()
+
+    def enrich(self, events: list[SignalEvent], cluster: EventCluster) -> tuple[list[SignalBundle], dict]:
         if not events:
-            return []
+            return [], {"llm_used": False, "llm_status": "empty"}
 
         dark_events = [event for event in events if event.source == "dark"]
         market_events = [event for event in events if event.source == "market"]
@@ -33,20 +39,32 @@ class SignalAlchemist:
         if not market_events:
             uncertainty_notes.append("No explicit market stress signal was provided; response capacity is inferred indirectly.")
 
-        return [
-            SignalBundle(
-                bundle_id=f"{scenario_id}-bundle-1",
-                anomaly_tags=anomaly_tags,
-                pressure_indicators=pressure_indicators[:6],
-                sentiment_entropy=ScoreDetail(
-                    value=sentiment_entropy_value,
-                    explanation="Higher when weak signals are fragmented, unusual, and cluster around distrust or rerouting.",
-                ),
-                response_capacity=ScoreDetail(
-                    value=response_capacity_value,
-                    explanation="Lower when financing, repair, or policy response appears constrained.",
-                ),
-                supporting_signal_ids=[event.id for event in dark_events + market_events],
-                uncertainty_notes=uncertainty_notes,
-            )
-        ]
+        fallback = SignalBundle(
+            bundle_id=f"{cluster.cluster_id}-bundle-1",
+            cluster_id=cluster.cluster_id,
+            source_families=cluster.source_families,
+            agreement_score=cluster.agreement_score,
+            anomaly_tags=anomaly_tags,
+            pressure_indicators=pressure_indicators[:6],
+            sentiment_entropy=ScoreDetail(
+                value=sentiment_entropy_value,
+                explanation="Higher when weak signals are fragmented, unusual, and cluster around distrust or rerouting.",
+            ),
+            response_capacity=ScoreDetail(
+                value=response_capacity_value,
+                explanation="Lower when financing, repair, or policy response appears constrained.",
+            ),
+            supporting_signal_ids=[event.id for event in dark_events + market_events],
+            uncertainty_notes=uncertainty_notes,
+        )
+        refined, llm_diag = self.reasoner.refine_model(
+            system_prompt=self.prompts["signal_alchemist"],
+            user_payload={
+                "cluster": cluster.model_dump(mode="json"),
+                "events": [event.model_dump(mode="json") for event in events],
+                "fallback": fallback.model_dump(mode="json"),
+            },
+            model_class=SignalBundle,
+            fallback=fallback,
+        )
+        return [refined], llm_diag

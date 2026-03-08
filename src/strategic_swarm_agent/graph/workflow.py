@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import uuid4
+from datetime import datetime
 
 try:
     from langgraph.graph import END, START, StateGraph
@@ -50,26 +52,39 @@ from strategic_swarm_agent.agents.opportunity_generator import OpportunityGenera
 from strategic_swarm_agent.agents.pattern_matcher import PatternMatcher
 from strategic_swarm_agent.agents.ripple_architect import RippleArchitect
 from strategic_swarm_agent.agents.signal_alchemist import SignalAlchemist
+from strategic_swarm_agent.llm.backend import StructuredReasoner
 from strategic_swarm_agent.models import SwarmGraphState
+from strategic_swarm_agent.persistence.store import SignalStore, make_dead_letter
 from strategic_swarm_agent.providers.normalizer import SignalNormalizer
+from strategic_swarm_agent.providers.base import ProviderError, SignalProvider
+from strategic_swarm_agent.providers.registry import build_live_providers
 from strategic_swarm_agent.providers.sample import DarkSignalProvider, MarketContextProvider, NewsSignalProvider
 from strategic_swarm_agent.scoring.fragility import FragilityScorer
 from strategic_swarm_agent.synthesis.report_builder import ReportBuilder
 
 
 class StrategicSwarmWorkflow:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        store: SignalStore,
+        live_providers: list[SignalProvider] | None = None,
+        reasoner: StructuredReasoner | None = None,
+    ) -> None:
+        self.store = store
+        self.reasoner = reasoner or StructuredReasoner()
         self.news = NewsSignalProvider()
         self.market = MarketContextProvider()
         self.dark = DarkSignalProvider()
+        self.live_providers = live_providers or build_live_providers()
         self.normalizer = SignalNormalizer()
-        self.pattern_matcher = PatternMatcher()
-        self.signal_alchemist = SignalAlchemist()
+        self.pattern_matcher = PatternMatcher(self.reasoner)
+        self.signal_alchemist = SignalAlchemist(self.reasoner)
         self.fragility = FragilityScorer()
-        self.ripple_architect = RippleArchitect()
+        self.ripple_architect = RippleArchitect(self.reasoner)
         self.opportunity_generator = OpportunityGenerator()
         self.execution_critic = ExecutionCritic()
-        self.report_builder = ReportBuilder()
+        self.report_builder = ReportBuilder(self.reasoner)
 
     def build(self):
         graph = StateGraph(SwarmGraphState)
@@ -105,33 +120,101 @@ class StrategicSwarmWorkflow:
         return graph.compile()
 
     def ingest_signals(self, state: SwarmGraphState) -> SwarmGraphState:
-        scenario_id = state["scenario_id"]
-        raw = self.news.fetch(scenario_id) + self.market.fetch(scenario_id) + self.dark.fetch(scenario_id)
-        provenance = [f"Ingested {len(raw)} raw signals from sample providers for {scenario_id}."]
-        return {"raw_signals": raw, "provenance": provenance, "opportunity_retry_count": 0, "max_opportunity_retries": 1}
+        if state.get("raw_signals"):
+            provenance = [f"Loaded {len(state['raw_signals'])} raw signals into the workflow."]
+            return {"provenance": provenance, "opportunity_retry_count": 0, "max_opportunity_retries": 1}
+
+        if state.get("run_mode") == "demo":
+            scenario_id = state["scenario_id"]
+            raw = self.news.fetch(scenario_id) + self.market.fetch(scenario_id) + self.dark.fetch(scenario_id)
+            provenance = [f"Ingested {len(raw)} raw signals from sample providers for {scenario_id}."]
+            return {"raw_signals": raw, "provenance": provenance, "opportunity_retry_count": 0, "max_opportunity_retries": 1}
+
+        start_at = datetime.fromisoformat(state["window_start"])
+        end_at = datetime.fromisoformat(state["window_end"])
+        raw = []
+        provider_counts: dict[str, int] = {}
+        for provider in self.live_providers:
+            try:
+                fetched = provider.fetch_window(start_at, end_at)
+                provider_counts[provider.provider_name] = len(fetched)
+                raw.extend(fetched)
+            except ProviderError as exc:
+                self.store.save_dead_letter(
+                    make_dead_letter(
+                        provider_name=provider.provider_name,
+                        window_start=start_at,
+                        window_end=end_at,
+                        error_type="provider_error",
+                        error_message=str(exc),
+                    )
+                )
+        provenance = [f"Ingested {len(raw)} raw signals from live providers."]
+        diagnostics = {"source_counts": provider_counts}
+        return {
+            "raw_signals": raw,
+            "provenance": provenance,
+            "diagnostics": diagnostics,
+            "opportunity_retry_count": 0,
+            "max_opportunity_retries": 1,
+        }
 
     def normalize_events(self, state: SwarmGraphState) -> SwarmGraphState:
-        events = self.normalizer.normalize(state["raw_signals"])
-        provenance = [*state["provenance"], f"Normalized {len(events)} events into SignalEvent records."]
-        return {"normalized_events": events, "provenance": provenance}
+        story_keys = []
+        dedupe_hashes = []
+        for signal in state["raw_signals"]:
+            dedupe_hashes.append(signal.dedupe_hash or signal.id)
+            story_keys.append(self.normalizer._story_key(signal))
+        known_hashes = self.store.get_seen_dedupe_hashes(dedupe_hashes) if state.get("run_mode") not in {"demo", "replay"} else set()
+        prior_story_counts = self.store.get_story_counts(story_keys) if state.get("run_mode") != "demo" else {}
+        events, clusters, norm_diag = self.normalizer.normalize(
+            state["raw_signals"],
+            known_dedupe_hashes=known_hashes,
+            prior_story_counts=prior_story_counts,
+        )
+        if state.get("run_mode") != "demo":
+            self.store.save_raw_signals(state["raw_signals"])
+            self.store.save_normalized_events(events)
+            self.store.save_event_clusters(clusters)
+        selected_cluster = clusters[0] if clusters else None
+        diagnostics = {**state.get("diagnostics", {}), **norm_diag}
+        provenance = [*state["provenance"], f"Normalized {len(events)} events into SignalEvent records across {len(clusters)} clusters."]
+        return {
+            "normalized_events": events,
+            "event_clusters": clusters,
+            "selected_cluster": selected_cluster,
+            "diagnostics": diagnostics,
+            "provenance": provenance,
+        }
 
     def pattern_match(self, state: SwarmGraphState) -> SwarmGraphState:
-        patterns = self.pattern_matcher.match(state["normalized_events"])
+        cluster = state.get("selected_cluster")
+        cluster_events = [item for item in state["normalized_events"] if item.cluster_id == cluster.cluster_id] if cluster else []
+        patterns, llm_diag = self.pattern_matcher.match(cluster_events, cluster) if cluster else ([], {"llm_used": False, "llm_status": "empty"})
         diagnostics = {
             **state.get("diagnostics", {}),
             "pattern_confidence": patterns[0].confidence if patterns else 0.0,
+            "pattern_llm": llm_diag,
         }
-        provenance = [*state["provenance"], f"Matched topology {patterns[0].pattern_name}."]
+        provenance = [*state["provenance"], f"Matched topology {patterns[0].pattern_name}."] if patterns else [*state["provenance"], "Pattern match skipped."]
         return {"abstract_patterns": patterns, "diagnostics": diagnostics, "provenance": provenance}
 
     def enrich_dark_signals(self, state: SwarmGraphState) -> SwarmGraphState:
-        bundles = self.signal_alchemist.enrich(state["normalized_events"], state["scenario_id"])
+        cluster = state.get("selected_cluster")
+        cluster_events = [item for item in state["normalized_events"] if item.cluster_id == cluster.cluster_id] if cluster else []
+        bundles, llm_diag = self.signal_alchemist.enrich(cluster_events, cluster) if cluster else ([], {"llm_used": False, "llm_status": "empty"})
+        diagnostics = {**state.get("diagnostics", {}), "signal_alchemist_llm": llm_diag}
         provenance = [*state["provenance"], f"Built {len(bundles)} signal bundle(s) from weak and market signals."]
-        return {"signal_bundles": bundles, "provenance": provenance}
+        return {"signal_bundles": bundles, "provenance": provenance, "diagnostics": diagnostics}
 
     def compute_fragility(self, state: SwarmGraphState) -> SwarmGraphState:
+        cluster = state.get("selected_cluster")
+        cluster_events = [item for item in state["normalized_events"] if item.cluster_id == cluster.cluster_id] if cluster else []
+        if not cluster or not state.get("abstract_patterns"):
+            return {"fragility_assessments": [], "diagnostics": state.get("diagnostics", {}), "provenance": [*state["provenance"], "Fragility scoring skipped."]}
         assessment = self.fragility.score(
-            state["normalized_events"],
+            cluster_events,
+            cluster,
             state["abstract_patterns"],
             state.get("signal_bundles", []),
         )
@@ -139,18 +222,24 @@ class StrategicSwarmWorkflow:
             **state.get("diagnostics", {}),
             "fragility_score": assessment[0].fragility_score.value if assessment else 0.0,
         }
-        provenance = [*state["provenance"], f"Computed fragility score {assessment[0].fragility_score.value:.2f}."]
+        provenance = [*state["provenance"], f"Computed fragility score {assessment[0].fragility_score.value:.2f}."] if assessment else [*state["provenance"], "Fragility scoring skipped."]
         return {"fragility_assessments": assessment, "diagnostics": diagnostics, "provenance": provenance}
 
     def build_ripple_graph(self, state: SwarmGraphState) -> SwarmGraphState:
-        scenarios = self.ripple_architect.build(
-            state["normalized_events"],
+        cluster = state.get("selected_cluster")
+        cluster_events = [item for item in state["normalized_events"] if item.cluster_id == cluster.cluster_id] if cluster else []
+        if not cluster or not state.get("fragility_assessments"):
+            return {"ripple_scenarios": [], "provenance": [*state["provenance"], "Ripple graph skipped."], "diagnostics": state.get("diagnostics", {})}
+        scenarios, llm_diag = self.ripple_architect.build(
+            cluster_events,
+            cluster,
             state["abstract_patterns"],
             state["fragility_assessments"],
             state.get("signal_bundles", []),
         )
+        diagnostics = {**state.get("diagnostics", {}), "ripple_llm": llm_diag}
         provenance = [*state["provenance"], f"Generated {len(scenarios)} ripple scenario(s)."]
-        return {"ripple_scenarios": scenarios, "provenance": provenance}
+        return {"ripple_scenarios": scenarios, "provenance": provenance, "diagnostics": diagnostics}
 
     def generate_opportunities(self, state: SwarmGraphState) -> SwarmGraphState:
         retry_count = state.get("opportunity_retry_count", 0)
@@ -159,7 +248,7 @@ class StrategicSwarmWorkflow:
         return {"candidate_opportunities": ideas, "provenance": provenance}
 
     def critique_execution(self, state: SwarmGraphState) -> SwarmGraphState:
-        reviewed = self.execution_critic.review(state["candidate_opportunities"])
+        reviewed = self.execution_critic.review(state["candidate_opportunities"], state["selected_cluster"])
         approved_count = sum(1 for item in reviewed if item.approved)
         retry_count = state.get("opportunity_retry_count", 0)
         if approved_count == 0:
@@ -167,6 +256,7 @@ class StrategicSwarmWorkflow:
         diagnostics = {
             **state.get("diagnostics", {}),
             "approved_opportunities": approved_count,
+            "publish_decision": "publish" if approved_count and state["selected_cluster"].agreement_score >= 0.45 else "monitor_only",
         }
         provenance = [*state["provenance"], f"Execution critic approved {approved_count} ideas."]
         return {
@@ -177,9 +267,19 @@ class StrategicSwarmWorkflow:
         }
 
     def synthesize_report(self, state: SwarmGraphState) -> SwarmGraphState:
-        report = self.report_builder.build(
-            scenario_id=state["scenario_id"],
-            events=state["normalized_events"],
+        cluster = state["selected_cluster"]
+        cluster_events = [item for item in state["normalized_events"] if item.cluster_id == cluster.cluster_id]
+        run_id = state.get("diagnostics", {}).get("run_id", uuid4().hex[:12])
+        if not cluster:
+            return {
+                "final_report": None,
+                "diagnostics": {**state.get("diagnostics", {}), "publish_decision": "monitor_only"},
+            }
+        published = self.report_builder.build(
+            report_id=uuid4().hex[:12],
+            run_id=run_id,
+            events=cluster_events,
+            cluster=cluster,
             patterns=state["abstract_patterns"],
             bundles=state.get("signal_bundles", []),
             fragility=state["fragility_assessments"],
@@ -187,7 +287,8 @@ class StrategicSwarmWorkflow:
             reviewed=state["reviewed_opportunities"],
             provenance=state["provenance"],
         )
-        return {"final_report": report}
+        diagnostics = {**state.get("diagnostics", {}), **published.diagnostics, "publish_decision": published.publication_status}
+        return {"final_report": published.report, "diagnostics": diagnostics}
 
     def final_review(self, state: SwarmGraphState) -> SwarmGraphState:
         report = state["final_report"]

@@ -1,0 +1,19 @@
+{
+  "status": "ok",
+  "totalResults": 1,
+  "articles": [
+    {
+      "source": {
+        "id": null,
+        "name": "Example News"
+      },
+      "author": "Reporter",
+      "title": "Undersea cable rerouting plan gains traction",
+      "description": "Operators fund alternate routes after repeated sabotage scares.",
+      "url": "https://example.com/news/cable-rerouting",
+      "urlToImage": "https://example.com/image.jpg",
+      "publishedAt": "2026-03-05T10:15:00Z",
+      "content": "Full article body."
+    }
+  ]
+}

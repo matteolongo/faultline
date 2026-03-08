@@ -8,10 +8,12 @@ from strategic_swarm_agent.scoring.fragility import FragilityScorer
 def test_fragility_scoring_produces_explanations() -> None:
     scenario_id = "debt_defense_spiral"
     raw = NewsSignalProvider().fetch(scenario_id) + MarketContextProvider().fetch(scenario_id) + DarkSignalProvider().fetch(scenario_id)
-    events = SignalNormalizer().normalize(raw)
-    patterns = PatternMatcher().match(events)
-    bundles = SignalAlchemist().enrich(events, scenario_id)
-    assessment = FragilityScorer().score(events, patterns, bundles)[0]
+    events, clusters, _ = SignalNormalizer().normalize(raw)
+    cluster = clusters[0]
+    cluster_events = [event for event in events if event.cluster_id == cluster.cluster_id]
+    patterns, _ = PatternMatcher().match(cluster_events, cluster)
+    bundles, _ = SignalAlchemist().enrich(cluster_events, cluster)
+    assessment = FragilityScorer().score(cluster_events, cluster, patterns, bundles)[0]
 
     assert assessment.fragility_score.value > 0.5
     assert "Composite score" in assessment.fragility_score.explanation

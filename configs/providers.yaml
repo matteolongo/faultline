@@ -1,0 +1,53 @@
+defaults:
+  timeout_seconds: 20
+  retries: 3
+  backoff_seconds: 1.0
+  lookback_minutes: 60
+  language: en
+  max_items_per_provider: 50
+source_weights:
+  news: 0.82
+  market: 1.0
+  macro: 0.95
+  alt: 0.78
+providers:
+  newsapi:
+    enabled: true
+    source_family: news
+    base_url: https://newsapi.org/v2
+    everything_query: >
+      ("undersea cable" OR chokepoint OR microgrid OR "open source model" OR
+      stablecoin OR refinancing OR "payment rail" OR protocol)
+    top_headlines_query: technology OR business OR world
+    page_size: 50
+    max_pages: 2
+    language: en
+    sources_whitelist: []
+  alphavantage:
+    enabled: true
+    source_family: market
+    base_url: https://www.alphavantage.co/query
+    news_topics: technology,earnings,mergers_and_acquisitions,energy_transportation,blockchain
+    tickers: NVDA,MSFT,QQQ,XLU,XLE,BTCUSD
+    quote_symbols: QQQ,XLU,XLE,GLD,UUP
+    news_limit: 50
+  fred:
+    enabled: true
+    source_family: macro
+    base_url: https://api.stlouisfed.org/fred
+    series_ids:
+      - DGS10
+      - BAMLH0A0HYM2
+      - WALCL
+      - SOFR
+    updates_limit: 20
+  gdelt:
+    enabled: true
+    source_family: alt
+    base_url: https://api.gdeltproject.org/api/v2/doc/doc
+    query: >
+      ("undersea cable" OR chokepoint OR microgrid OR "open source model" OR
+      stablecoin OR refinancing OR "payment rail" OR protocol)
+    mode: ArtList
+    format: json
+    maxrecords: 50

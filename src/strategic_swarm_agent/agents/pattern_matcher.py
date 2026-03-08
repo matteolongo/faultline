@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from collections import Counter
 
-from strategic_swarm_agent.models import AbstractPattern, HistoricalAnalog, SignalEvent
-from strategic_swarm_agent.utils.config import load_archetypes
+from strategic_swarm_agent.llm.backend import StructuredReasoner
+from strategic_swarm_agent.models import AbstractPattern, EventCluster, HistoricalAnalog, SignalEvent
+from strategic_swarm_agent.utils.config import load_archetypes, load_prompts
 
 EMPIRE_KEYWORDS = {
     "consortium",
@@ -32,12 +33,32 @@ DISRUPTOR_KEYWORDS = {
 
 
 class PatternMatcher:
-    def __init__(self) -> None:
+    def __init__(self, reasoner: StructuredReasoner | None = None) -> None:
         self.archetypes = load_archetypes()
+        self.prompts = load_prompts()
+        self.reasoner = reasoner or StructuredReasoner()
 
-    def match(self, events: list[SignalEvent]) -> list[AbstractPattern]:
+    def match(self, events: list[SignalEvent], cluster: EventCluster | None = None) -> tuple[list[AbstractPattern], dict]:
         if not events:
-            return []
+            return [], {"llm_used": False, "llm_status": "empty"}
+        if cluster is None:
+            cluster = EventCluster(
+                cluster_id=events[0].cluster_id,
+                story_key=events[0].story_key,
+                canonical_title=events[0].title,
+                summary=events[0].summary,
+                region=events[0].region,
+                language=events[0].language,
+                entities=events[0].entities,
+                tags=events[0].tags,
+                source_families=events[0].source_families or [events[0].source],
+                signal_ids=[event.id for event in events],
+                first_seen_at=min(event.timestamp for event in events),
+                last_seen_at=max(event.timestamp for event in events),
+                novelty_score=max(event.novelty for event in events),
+                agreement_score=min(1.0, 0.2 + len({event.source for event in events}) * 0.25),
+                cluster_strength=min(1.0, 0.3 + len(events) * 0.1),
+            )
 
         tag_pool = {tag for event in events for tag in event.tags}
         text_pool = " ".join(
@@ -65,28 +86,37 @@ class PatternMatcher:
         )
         confidence = min(0.95, 0.42 + len(tag_pool.intersection(set(best.trigger_tags))) * 0.08)
 
-        return [
-            AbstractPattern(
-                pattern_name=best.name,
-                empire_type=best.empire_type,
-                disruptor_type=best.disruptor_type,
-                asymmetry_type=best.asymmetry_type,
-                empire_actor=empire_actor,
-                disruptor_actor=disruptor_actor,
-                cheap_weapon=cheap_weapon,
-                armor_breach=armor_breach,
-                historical_analogs=[
-                    HistoricalAnalog(
-                        name=analog.name,
-                        reference=analog.reference,
-                        why_relevant=analog.why_relevant,
-                    )
-                    for analog in analogs
-                ],
-                explanation=explanation,
-                confidence=confidence,
-            )
-        ]
+        fallback = AbstractPattern(
+            pattern_name=best.name,
+            empire_type=best.empire_type,
+            disruptor_type=best.disruptor_type,
+            asymmetry_type=best.asymmetry_type,
+            empire_actor=empire_actor,
+            disruptor_actor=disruptor_actor,
+            cheap_weapon=cheap_weapon,
+            armor_breach=armor_breach,
+            historical_analogs=[
+                HistoricalAnalog(
+                    name=analog.name,
+                    reference=analog.reference,
+                    why_relevant=analog.why_relevant,
+                )
+                for analog in analogs
+            ],
+            explanation=explanation,
+            confidence=confidence,
+        )
+        refined, llm_diag = self.reasoner.refine_model(
+            system_prompt=self.prompts["pattern_matcher"],
+            user_payload={
+                "cluster": cluster.model_dump(mode="json"),
+                "events": [event.model_dump(mode="json") for event in events],
+                "fallback": fallback.model_dump(mode="json"),
+            },
+            model_class=AbstractPattern,
+            fallback=fallback,
+        )
+        return [refined], llm_diag
 
     def _select_actor(
         self,

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ScoreDetail(BaseModel):
@@ -13,32 +14,91 @@ class ScoreDetail(BaseModel):
 
 class RawSignal(BaseModel):
     id: str
+    provider_name: str | None = None
+    provider_item_id: str | None = None
     source: str
     timestamp: datetime
+    fetched_at: datetime | None = None
+    published_at: datetime | None = None
     signal_type: str
     title: str
     summary: str
+    source_url: str | None = None
+    request_url: str | None = None
+    query_key: str | None = None
+    language: str | None = None
     entities: list[str] = Field(default_factory=list)
     region: str
     tags: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
+    provider_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    content_hash: str | None = None
+    dedupe_hash: str | None = None
+    raw_payload_reference: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def populate_defaults(self) -> "RawSignal":
+        if self.provider_name is None:
+            self.provider_name = self.source
+        if self.provider_item_id is None:
+            self.provider_item_id = self.id
+        if self.fetched_at is None:
+            self.fetched_at = self.timestamp
+        if self.published_at is None:
+            self.published_at = self.timestamp
+        if self.provider_confidence is None:
+            self.provider_confidence = self.confidence
+        if self.content_hash is None:
+            self.content_hash = hashlib.sha256(f"{self.title} {self.summary}".encode("utf-8")).hexdigest()
+        if self.dedupe_hash is None:
+            self.dedupe_hash = hashlib.sha256(f"{(self.source_url or '').lower()}::{self.title.lower().strip()}".encode("utf-8")).hexdigest()
+        if self.raw_payload_reference is None:
+            self.raw_payload_reference = f"{self.provider_name}:{self.provider_item_id}"
+        return self
 
 
 class SignalEvent(BaseModel):
     id: str
+    provider_name: str | None = None
     source: str
     timestamp: datetime
+    fetched_at: datetime | None = None
+    published_at: datetime | None = None
     signal_type: str
     title: str
     summary: str
+    source_url: str | None = None
+    language: str | None = None
     entities: list[str] = Field(default_factory=list)
     region: str
     tags: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
+    provider_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     novelty: float = Field(ge=0.0, le=1.0)
     possible_systemic_relevance: float = Field(ge=0.0, le=1.0)
+    cluster_id: str | None = None
+    story_key: str | None = None
+    dedupe_hash: str | None = None
+    source_families: list[str] = Field(default_factory=list)
+    query_key: str | None = None
     raw_payload_reference: str
+
+    @model_validator(mode="after")
+    def populate_event_defaults(self) -> "SignalEvent":
+        if self.provider_name is None:
+            self.provider_name = self.source
+        if self.fetched_at is None:
+            self.fetched_at = self.timestamp
+        if self.provider_confidence is None:
+            self.provider_confidence = self.confidence
+        if self.story_key is None:
+            self.story_key = self.id
+        if self.cluster_id is None:
+            self.cluster_id = self.id
+        if self.dedupe_hash is None:
+            self.dedupe_hash = self.id
+        return self
 
 
 class HistoricalAnalog(BaseModel):
@@ -63,6 +123,9 @@ class AbstractPattern(BaseModel):
 
 class SignalBundle(BaseModel):
     bundle_id: str
+    cluster_id: str
+    source_families: list[str] = Field(default_factory=list)
+    agreement_score: float = Field(ge=0.0, le=1.0)
     anomaly_tags: list[str] = Field(default_factory=list)
     pressure_indicators: list[str] = Field(default_factory=list)
     sentiment_entropy: ScoreDetail
@@ -122,6 +185,7 @@ class ReviewedOpportunity(BaseModel):
 
 
 class FinalReport(BaseModel):
+    publication_status: str = "publish"
     executive_summary: str
     system_topology: str
     fragility_map: list[str] = Field(default_factory=list)
@@ -131,6 +195,7 @@ class FinalReport(BaseModel):
     open_questions: list[str] = Field(default_factory=list)
     invalidation_signals: list[str] = Field(default_factory=list)
     provenance: list[str] = Field(default_factory=list)
+    monitor_only_reason: str | None = None
 
 
 class Archetype(BaseModel):
@@ -148,3 +213,54 @@ class FragilityPattern(BaseModel):
     name: str
     description: str
     trigger_tags: list[str] = Field(default_factory=list)
+
+
+class EventCluster(BaseModel):
+    cluster_id: str
+    story_key: str
+    canonical_title: str
+    summary: str
+    region: str
+    language: str | None = None
+    entities: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    source_families: list[str] = Field(default_factory=list)
+    signal_ids: list[str] = Field(default_factory=list)
+    first_seen_at: datetime
+    last_seen_at: datetime
+    novelty_score: float = Field(ge=0.0, le=1.0)
+    agreement_score: float = Field(ge=0.0, le=1.0)
+    cluster_strength: float = Field(ge=0.0, le=1.0)
+
+
+class PublishedReport(BaseModel):
+    report_id: str
+    run_id: str
+    cluster_id: str
+    publication_status: str
+    published_at: datetime
+    report: FinalReport
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProviderHealthStatus(BaseModel):
+    provider_name: str
+    source_family: str
+    enabled: bool
+    configured: bool
+    last_success_at: datetime | None = None
+    last_error_at: datetime | None = None
+    dead_letter_count: int = 0
+    recent_signal_count: int = 0
+
+
+class DeadLetterRecord(BaseModel):
+    id: str
+    provider_name: str
+    window_start: datetime
+    window_end: datetime
+    failed_at: datetime
+    request_url: str | None = None
+    error_type: str
+    error_message: str
+    payload: dict[str, Any] = Field(default_factory=dict)
