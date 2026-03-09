@@ -1,8 +1,40 @@
+# Python
 .venv/
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Testing / linting
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Environment & secrets
 .env
 .env.local
-outputs/
-*.pyc
+.env.*.local
 private/
+
+# Runtime outputs (generated data — not source code)
+outputs/
+notebooks/outputs/
+
+# LangGraph Studio local state (binary checkpoints, not useful in VCS)
+.langgraph_api/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# VSCode (settings committed, but workspace-local overrides excluded)
+.vscode/*.code-workspace
