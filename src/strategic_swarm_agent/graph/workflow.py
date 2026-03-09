@@ -4,6 +4,8 @@ from typing import Literal
 from uuid import uuid4
 from datetime import UTC, datetime
 
+from pydantic import BaseModel
+
 try:
     from langgraph.graph import END, START, StateGraph
 except Exception:  # pragma: no cover - fallback for incompatible local langgraph installs
@@ -63,6 +65,11 @@ from strategic_swarm_agent.providers.registry import build_live_providers
 from strategic_swarm_agent.providers.sample import DarkSignalProvider, MarketContextProvider, NewsSignalProvider
 from strategic_swarm_agent.scoring.fragility import FragilityScorer
 from strategic_swarm_agent.synthesis.report_builder import ReportBuilder
+
+
+class EquityList(BaseModel):
+    """Module-level wrapper used for structured LLM output in map_equity_opportunities."""
+    opportunities: list[EquityOpportunity]
 
 
 class StrategicSwarmWorkflow:
@@ -296,12 +303,7 @@ class StrategicSwarmWorkflow:
                 "diagnostics": state.get("diagnostics", {}),
             }
 
-        from pydantic import BaseModel as _BaseModel
-
-        class _EquityList(_BaseModel):
-            opportunities: list[EquityOpportunity]
-
-        fallback = _EquityList(opportunities=[])
+        fallback = EquityList(opportunities=[])
         system_prompt = (
             "You are an equity strategist. Given a detected macro scenario and its causal consequence chain, "
             "identify specific publicly-traded companies that will be significantly affected.\n"
@@ -323,7 +325,7 @@ class StrategicSwarmWorkflow:
                 "geographic_scope": scenario.geographic_scope,
                 "consequence_chain": scenario.consequence_chain,
             },
-            model_class=_EquityList,
+            model_class=EquityList,
             fallback=fallback,
         )
 

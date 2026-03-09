@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any, TypeVar
 
@@ -9,11 +10,13 @@ from pydantic import BaseModel, ValidationError
 
 T = TypeVar("T", bound=BaseModel)
 
+logger = logging.getLogger(__name__)
+
 
 class StructuredReasoner:
     def __init__(self) -> None:
         self.api_key = os.getenv("OPENAI_API_KEY")
-        self.model = os.getenv("SWARM_LLM_MODEL", "gpt-4.1-mini")
+        self.model = os.getenv("SWARM_LLM_MODEL", "gpt-4o-mini")
 
     @property
     def enabled(self) -> bool:
@@ -61,4 +64,13 @@ class StructuredReasoner:
             candidate = model_class.model_validate_json(content)
             return candidate, {"llm_used": True, "llm_status": "ok"}
         except (httpx.HTTPError, ValidationError, json.JSONDecodeError) as exc:
-            return fallback, {"llm_used": True, "llm_status": "fallback", "llm_error": str(exc)}
+            error_body: str | None = None
+            if isinstance(exc, httpx.HTTPStatusError):
+                error_body = exc.response.text[:1000]
+                logger.warning("OpenAI API %s: %s", exc.response.status_code, error_body)
+            else:
+                logger.warning("LLM call failed (%s): %s", type(exc).__name__, exc)
+            diag: dict[str, Any] = {"llm_used": True, "llm_status": "fallback", "llm_error": str(exc)}
+            if error_body:
+                diag["llm_error_body"] = error_body
+            return fallback, diag

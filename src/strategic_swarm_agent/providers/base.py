@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
@@ -7,6 +8,8 @@ from typing import Any
 import httpx
 
 from strategic_swarm_agent.models import RawSignal
+
+logger = logging.getLogger(__name__)
 
 
 class SignalProvider(ABC):
@@ -47,7 +50,13 @@ class HTTPProvider(SignalProvider):
                     response = client.request(method, url, params=params, headers=headers, json=json_body)
                 response.raise_for_status()
                 return response.json()
+            except httpx.HTTPStatusError as exc:  # pragma: no cover
+                logger.warning("HTTP %s from %s: %s", exc.response.status_code, url, exc.response.text[:500])
+                last_error = exc
+                if attempt == self.retries:
+                    break
             except Exception as exc:  # pragma: no cover - exercised through provider tests
+                logger.warning("Request error (attempt %d/%d): %s", attempt, self.retries, exc)
                 last_error = exc
                 if attempt == self.retries:
                     break
