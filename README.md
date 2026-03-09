@@ -146,6 +146,21 @@ streamlit run src/strategic_swarm_agent/operator_app.py
 
 The notebook is the recommended operator surface. The Streamlit app is a small convenience wrapper over the same execution path.
 
+### LangGraph Studio
+
+The graph can also be visualised and run step-by-step in [LangGraph Studio](https://smith.langchain.com/studio). A `langgraph.json` config is included.
+
+**Requirements**: the package must be installed in editable mode so `langgraph dev` can import it:
+
+```bash
+pip install -e '.[dev]'        # only needed once
+langgraph dev                  # starts the local Studio server
+```
+
+Then open: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+
+The graph appears as `strategic_swarm`. You will need a free [LangSmith](https://smith.langchain.com) account for the Studio UI; the local API at `http://127.0.0.1:2024` works without one.
+
 For live mode you will need `NEWSAPI_API_KEY`, `ALPHAVANTAGE_API_KEY`, and `FRED_API_KEY`. If keys are missing, live/provider-health flows stay non-crashing and the demo/replay paths remain fully usable.
 
 Adding `OPENAI_API_KEY` is optional but recommended for two reasons: it enables the LLM refinement nodes (PatternMatcher, SignalAlchemist, etc.) **and** automatically triggers cluster-driven web search enrichment — after clustering, the system derives targeted fragility questions from each significant cluster and fetches live synthesis via OpenAI's `web_search_preview` tool before fragility scoring.
