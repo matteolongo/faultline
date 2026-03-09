@@ -13,6 +13,29 @@ T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
 
+def _enforce_additional_properties(schema: dict[str, Any]) -> dict[str, Any]:
+    """Recursively enforce OpenAI structured output schema requirements:
+    - additionalProperties: false on every object
+    - required must list every key in properties (no optional fields)
+
+    Pydantic generates optional fields as missing from 'required'. OpenAI rejects this.
+    We set required = list(properties.keys()) on every object node.
+    """
+    if isinstance(schema, dict):
+        if schema.get("type") == "object" or "properties" in schema:
+            schema.setdefault("additionalProperties", False)
+            if "properties" in schema:
+                schema["required"] = list(schema["properties"].keys())
+        for value in schema.values():
+            if isinstance(value, dict):
+                _enforce_additional_properties(value)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        _enforce_additional_properties(item)
+    return schema
+
+
 class StructuredReasoner:
     def __init__(self) -> None:
         self.api_key = os.getenv("OPENAI_API_KEY")
@@ -25,7 +48,7 @@ class StructuredReasoner:
     def refine_model(self, *, system_prompt: str, user_payload: dict[str, Any], model_class: type[T], fallback: T) -> tuple[T, dict[str, Any]]:
         if not self.enabled:
             return fallback, {"llm_used": False, "llm_status": "disabled"}
-        schema = model_class.model_json_schema()
+        schema = _enforce_additional_properties(model_class.model_json_schema())
         body = {
             "model": self.model,
             "input": [
