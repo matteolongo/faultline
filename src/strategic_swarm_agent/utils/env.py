@@ -4,7 +4,9 @@ from pathlib import Path
 
 try:
     from dotenv import load_dotenv
-except ImportError:  # pragma: no cover - optional at import time during partial installs
+except (
+    ImportError
+):  # pragma: no cover - optional at import time during partial installs
     load_dotenv = None
 
 

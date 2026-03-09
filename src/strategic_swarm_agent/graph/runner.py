@@ -13,7 +13,12 @@ from strategic_swarm_agent.providers.registry import build_live_providers
 from strategic_swarm_agent.providers.sample import SampleScenarioRepository
 from strategic_swarm_agent.synthesis.report_builder import render_markdown
 from strategic_swarm_agent.utils.env import bootstrap_env
-from strategic_swarm_agent.utils.io import ensure_directory, serialize_model, write_json, write_text
+from strategic_swarm_agent.utils.io import (
+    ensure_directory,
+    serialize_model,
+    write_json,
+    write_text,
+)
 
 
 class StrategicSwarmRunner:
@@ -24,13 +29,17 @@ class StrategicSwarmRunner:
         database_url: str | None = None,
     ) -> None:
         bootstrap_env()
-        self.output_dir = ensure_directory(Path(output_dir or os.getenv("SWARM_OUTPUT_DIR", "outputs")))
+        self.output_dir = ensure_directory(
+            Path(output_dir or os.getenv("SWARM_OUTPUT_DIR", "outputs"))
+        )
         self.database_url = database_url or os.getenv(
             "SWARM_DATABASE_URL",
             str(Path(db_path or self.output_dir / "swarm_runs.sqlite")),
         )
         self.store = SignalStore(self.database_url)
-        self.workflow = StrategicSwarmWorkflow(store=self.store, live_providers=build_live_providers()).build()
+        self.workflow = StrategicSwarmWorkflow(
+            store=self.store, live_providers=build_live_providers()
+        ).build()
 
     def run_demo(self, scenario_id: str) -> dict:
         return self._run(initial_state={"scenario_id": scenario_id, "run_mode": "demo"})
@@ -45,7 +54,9 @@ class StrategicSwarmRunner:
         )
 
     def run_latest(self, *, lookback_minutes: int | None = None) -> dict:
-        lookback = lookback_minutes or int(os.getenv("SWARM_DEFAULT_LOOKBACK_MINUTES", "60"))
+        lookback = lookback_minutes or int(
+            os.getenv("SWARM_DEFAULT_LOOKBACK_MINUTES", "60")
+        )
         end_at = datetime.now(UTC)
         start_at = end_at - timedelta(minutes=lookback)
         return self.run_live(start_at=start_at, end_at=end_at)
@@ -62,7 +73,9 @@ class StrategicSwarmRunner:
             "cluster_count": diagnostics.get("cluster_count", 0),
         }
 
-    def backfill(self, *, start_at: datetime, end_at: datetime, step_minutes: int = 60) -> list[dict]:
+    def backfill(
+        self, *, start_at: datetime, end_at: datetime, step_minutes: int = 60
+    ) -> list[dict]:
         cursor = start_at
         results = []
         while cursor < end_at:
@@ -71,13 +84,21 @@ class StrategicSwarmRunner:
             cursor = next_cursor
         return results
 
-    def replay(self, *, run_id: str | None = None, start_at: datetime | None = None, end_at: datetime | None = None) -> dict:
+    def replay(
+        self,
+        *,
+        run_id: str | None = None,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+    ) -> dict:
         if run_id:
             previous = self.store.get_run_state(run_id)
             if not previous:
                 raise ValueError(f"Unknown run_id: {run_id}")
             raw_signals = previous.get("raw_signals", [])
-            return self._run(initial_state={"run_mode": "replay", "raw_signals": raw_signals})
+            return self._run(
+                initial_state={"run_mode": "replay", "raw_signals": raw_signals}
+            )
         if not start_at or not end_at:
             raise ValueError("Replay requires either run_id or start_at/end_at.")
         raw_signals = self.store.load_raw_signals_for_window(start_at, end_at)
@@ -104,7 +125,9 @@ class StrategicSwarmRunner:
     def evaluate_goldset(self, scenario_ids: list[str]) -> list[dict]:
         return [self.evaluate(scenario_id) for scenario_id in scenario_ids]
 
-    def list_signals(self, *, limit: int = 25, provider_name: str | None = None) -> list[dict]:
+    def list_signals(
+        self, *, limit: int = 25, provider_name: str | None = None
+    ) -> list[dict]:
         return self.store.list_raw_signals(limit=limit, provider_name=provider_name)
 
     def provider_health(self) -> list[dict]:
@@ -120,14 +143,21 @@ class StrategicSwarmRunner:
                     "1" if provider.provider_name == "gdelt" else "",
                 )
             )
-            providers.append((provider.provider_name, provider.source_family, configured))
-        return [item.model_dump(mode="json") for item in self.store.provider_health(providers)]
+            providers.append(
+                (provider.provider_name, provider.source_family, configured)
+            )
+        return [
+            item.model_dump(mode="json")
+            for item in self.store.provider_health(providers)
+        ]
 
     def _run(self, *, initial_state: dict) -> dict:
         run_id = uuid4().hex[:12]
         if initial_state.get("raw_signals"):
             initial_state["raw_signals"] = [
-                signal if isinstance(signal, RawSignal) else RawSignal.model_validate(signal)
+                signal
+                if isinstance(signal, RawSignal)
+                else RawSignal.model_validate(signal)
                 for signal in initial_state["raw_signals"]
             ]
         initial_state = {
@@ -136,31 +166,44 @@ class StrategicSwarmRunner:
         }
         snapshots = list(self.workflow.stream(initial_state, stream_mode="values"))
         final_state = snapshots[-1]
-        scenario_label = initial_state.get("scenario_id") or initial_state.get("run_mode", "live")
+        scenario_label = initial_state.get("scenario_id") or initial_state.get(
+            "run_mode", "live"
+        )
         run_dir = ensure_directory(self.output_dir / scenario_label / run_id)
         write_json(run_dir / "state.json", final_state)
         write_json(run_dir / "trace.json", snapshots)
         if final_state.get("final_report") is not None:
             write_json(run_dir / "report.json", final_state["final_report"])
-            write_text(run_dir / "report.md", render_markdown(final_state["final_report"]))
+            write_text(
+                run_dir / "report.md", render_markdown(final_state["final_report"])
+            )
         self.store.save_run(
             run_id=run_id,
             scenario_id=initial_state.get("scenario_id"),
             run_mode=initial_state.get("run_mode", "demo"),
             window_start=self._parse_time(initial_state.get("window_start")),
             window_end=self._parse_time(initial_state.get("window_end")),
-            publish_decision=final_state.get("diagnostics", {}).get("publish_decision", "monitor_only"),
+            publish_decision=final_state.get("diagnostics", {}).get(
+                "publish_decision", "monitor_only"
+            ),
             diagnostics=final_state.get("diagnostics", {}),
             final_state=serialize_model(final_state),
             trace=serialize_model(snapshots),
         )
-        if final_state.get("final_report") is not None and final_state.get("selected_cluster") is not None:
+        if (
+            final_state.get("final_report") is not None
+            and final_state.get("selected_cluster") is not None
+        ):
             self.store.save_report(
                 PublishedReport(
                     report_id=uuid4().hex[:12],
                     run_id=run_id,
-                    cluster_id=final_state["selected_cluster"]["cluster_id"] if isinstance(final_state["selected_cluster"], dict) else final_state["selected_cluster"].cluster_id,
-                    publication_status=final_state["final_report"]["publication_status"] if isinstance(final_state["final_report"], dict) else final_state["final_report"].publication_status,
+                    cluster_id=final_state["selected_cluster"]["cluster_id"]
+                    if isinstance(final_state["selected_cluster"], dict)
+                    else final_state["selected_cluster"].cluster_id,
+                    publication_status=final_state["final_report"]["publication_status"]
+                    if isinstance(final_state["final_report"], dict)
+                    else final_state["final_report"].publication_status,
                     published_at=datetime.now(UTC),
                     report=final_state["final_report"],
                     diagnostics=final_state.get("diagnostics", {}),

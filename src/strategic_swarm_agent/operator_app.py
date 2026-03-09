@@ -18,14 +18,18 @@ def main() -> None:
     try:
         import streamlit as st
     except ImportError as exc:  # pragma: no cover - dependency-gated runtime
-        raise SystemExit("Install operator extras first: pip install -e '.[operator]'") from exc
+        raise SystemExit(
+            "Install operator extras first: pip install -e '.[operator]'"
+        ) from exc
 
     bootstrap_env()
     st.set_page_config(page_title="Strategic Swarm Operator", layout="wide")
     st.title("Strategic Swarm Operator")
     st.caption("Manual research runs over the existing StrategicSwarmRunner.")
 
-    output_dir = st.sidebar.text_input("Output directory", value=os.getenv("SWARM_OUTPUT_DIR", "outputs"))
+    output_dir = st.sidebar.text_input(
+        "Output directory", value=os.getenv("SWARM_OUTPUT_DIR", "outputs")
+    )
     runner = StrategicSwarmRunner(output_dir=output_dir)
 
     st.sidebar.subheader("Provider Health")
@@ -41,11 +45,15 @@ def main() -> None:
     if mode == "demo":
         scenario = st.sidebar.selectbox("Scenario", available_demo_scenarios(), index=0)
     elif mode == "latest":
-        lookback_minutes = int(st.sidebar.number_input("Lookback minutes", min_value=15, value=60, step=15))
+        lookback_minutes = int(
+            st.sidebar.number_input("Lookback minutes", min_value=15, value=60, step=15)
+        )
     elif mode == "live":
         default_end = datetime.now(UTC).replace(microsecond=0, second=0)
         default_start = default_end - timedelta(minutes=60)
-        start_raw = st.sidebar.text_input("Start (ISO8601)", value=default_start.isoformat())
+        start_raw = st.sidebar.text_input(
+            "Start (ISO8601)", value=default_start.isoformat()
+        )
         end_raw = st.sidebar.text_input("End (ISO8601)", value=default_end.isoformat())
         start_at = parse_operator_datetime(start_raw)
         end_at = parse_operator_datetime(end_raw)
@@ -88,7 +96,9 @@ def main() -> None:
             st.markdown("### Provenance")
             for item in report_json.get("provenance", []):
                 st.markdown(f"- {item}")
-            markdown_report = payload["report_markdown"] or load_report_markdown(summary["run_dir"])
+            markdown_report = payload["report_markdown"] or load_report_markdown(
+                summary["run_dir"]
+            )
             if markdown_report:
                 st.markdown("### Full Report")
                 st.markdown(markdown_report)

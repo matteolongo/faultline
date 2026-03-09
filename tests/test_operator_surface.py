@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from strategic_swarm_agent.graph.runner import StrategicSwarmRunner
 from strategic_swarm_agent.presentation.operator_surface import (
     available_demo_scenarios,

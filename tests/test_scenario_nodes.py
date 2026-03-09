@@ -1,22 +1,21 @@
 """Tests for detect_scenario and map_equity_opportunities workflow nodes."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 from strategic_swarm_agent.models.contracts import (
-    AbstractPattern,
     EquityOpportunity,
     EventCluster,
+    FinalReport,
     ScenarioDetection,
 )
 from strategic_swarm_agent.synthesis.report_builder import render_markdown
-from strategic_swarm_agent.models.contracts import FinalReport
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 def _make_cluster(n_signals: int = 5) -> EventCluster:
     return EventCluster(
@@ -53,6 +52,7 @@ def _base_state(cluster: EventCluster | None = None) -> dict:
 
 
 # ── ScenarioDetection model ────────────────────────────────────────────────────
+
 
 def test_scenario_detection_model_valid():
     sd = ScenarioDetection(
@@ -93,6 +93,7 @@ def test_scenario_detection_defaults():
 
 # ── EquityOpportunity model ────────────────────────────────────────────────────
 
+
 def test_equity_opportunity_model_valid():
     opp = EquityOpportunity(
         symbol="REP.MC",
@@ -122,10 +123,12 @@ def test_equity_opportunity_directions():
 
 # ── detect_scenario node ───────────────────────────────────────────────────────
 
+
 def test_detect_scenario_skips_when_no_clusters():
     """detect_scenario returns None with no clusters."""
-    from strategic_swarm_agent.graph.workflow import StrategicSwarmWorkflow
     from unittest.mock import MagicMock
+
+    from strategic_swarm_agent.graph.workflow import StrategicSwarmWorkflow
 
     wf = StrategicSwarmWorkflow.__new__(StrategicSwarmWorkflow)
     wf.reasoner = MagicMock()
@@ -155,7 +158,10 @@ def test_detect_scenario_produces_scenario_detection():
 
     wf = StrategicSwarmWorkflow.__new__(StrategicSwarmWorkflow)
     wf.reasoner = MagicMock()
-    wf.reasoner.refine_model.return_value = (expected, {"llm_used": True, "llm_status": "ok"})
+    wf.reasoner.refine_model.return_value = (
+        expected,
+        {"llm_used": True, "llm_status": "ok"},
+    )
 
     state = _base_state()
     result = wf.detect_scenario(state)
@@ -178,7 +184,10 @@ def test_detect_scenario_uses_fallback_when_llm_disabled():
 
     wf = StrategicSwarmWorkflow.__new__(StrategicSwarmWorkflow)
     wf.reasoner = MagicMock()
-    wf.reasoner.refine_model.return_value = (fallback, {"llm_used": False, "llm_status": "disabled"})
+    wf.reasoner.refine_model.return_value = (
+        fallback,
+        {"llm_used": False, "llm_status": "disabled"},
+    )
 
     state = _base_state()
     result = wf.detect_scenario(state)
@@ -188,6 +197,7 @@ def test_detect_scenario_uses_fallback_when_llm_disabled():
 
 
 # ── map_equity_opportunities node ─────────────────────────────────────────────
+
 
 def test_map_equity_skips_when_no_scenario():
     """map_equity_opportunities skips gracefully when no scenario is detected."""
@@ -211,17 +221,28 @@ def test_map_equity_skips_when_no_scenario():
 def test_map_equity_produces_opportunities():
     """map_equity_opportunities returns a list of EquityOpportunity."""
     from pydantic import BaseModel
-
     from strategic_swarm_agent.graph.workflow import StrategicSwarmWorkflow
 
     class _EquityList(BaseModel):
         opportunities: list[EquityOpportunity]
 
     expected_opps = [
-        EquityOpportunity(symbol="REP.MC", company_name="Repsol", direction="long",
-                          rationale="Venezuela operations become critical.", scenario_link="Alternative suppliers gain", confidence=0.75),
-        EquityOpportunity(symbol="ARAMCO.SR", company_name="Saudi Aramco", direction="short",
-                          rationale="Export routes blocked.", scenario_link="Hormuz disrupted", confidence=0.8),
+        EquityOpportunity(
+            symbol="REP.MC",
+            company_name="Repsol",
+            direction="long",
+            rationale="Venezuela operations become critical.",
+            scenario_link="Alternative suppliers gain",
+            confidence=0.75,
+        ),
+        EquityOpportunity(
+            symbol="ARAMCO.SR",
+            company_name="Saudi Aramco",
+            direction="short",
+            rationale="Export routes blocked.",
+            scenario_link="Hormuz disrupted",
+            confidence=0.8,
+        ),
     ]
     equity_list = _EquityList(opportunities=expected_opps)
 
@@ -230,13 +251,20 @@ def test_map_equity_produces_opportunities():
         scenario_type="geopolitical_conflict",
         key_actors=["US", "Iran"],
         geographic_scope=["Middle East"],
-        consequence_chain=["US strikes Iran", "Hormuz disrupted", "Alternative suppliers gain"],
+        consequence_chain=[
+            "US strikes Iran",
+            "Hormuz disrupted",
+            "Alternative suppliers gain",
+        ],
         confidence=0.85,
     )
 
     wf = StrategicSwarmWorkflow.__new__(StrategicSwarmWorkflow)
     wf.reasoner = MagicMock()
-    wf.reasoner.refine_model.return_value = (equity_list, {"llm_used": True, "llm_status": "ok"})
+    wf.reasoner.refine_model.return_value = (
+        equity_list,
+        {"llm_used": True, "llm_status": "ok"},
+    )
     wf.web_search = MagicMock()
     wf.web_search.enabled = False
 
@@ -254,6 +282,7 @@ def test_map_equity_produces_opportunities():
 
 
 # ── render_markdown with scenario + equity ────────────────────────────────────
+
 
 def test_render_markdown_includes_scenario_and_equity():
     """render_markdown emits Detected Scenario and Equity Signals sections."""

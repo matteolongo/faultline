@@ -1,5 +1,7 @@
 # Strategic Swarm Agent
 
+[![CI](https://github.com/YOUR_ORG/YOUR_REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_ORG/YOUR_REPO/actions/workflows/ci.yml)
+
 Strategic Swarm Agent is a structural fragility reasoning engine. It ingests heterogeneous live signals, clusters them into structural stories, abstracts them into an `Empire vs Disruptor` topology, scores fragility and asymmetry, builds ripple scenarios, and surfaces only higher-convexity opportunity ideas with explicit invalidation logic.
 
 The design goal is not headline summarization. The system is built to answer:

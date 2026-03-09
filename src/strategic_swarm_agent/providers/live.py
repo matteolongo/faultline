@@ -102,10 +102,16 @@ class NewsAPIProvider(HTTPProvider):
             },
             headers=headers,
         )
-        signals.extend(self.parse_everything_payload(headlines, fetched_at=end_at, query_key="top-headlines"))
+        signals.extend(
+            self.parse_everything_payload(
+                headlines, fetched_at=end_at, query_key="top-headlines"
+            )
+        )
         return signals
 
-    def parse_everything_payload(self, payload: dict, *, fetched_at: datetime, query_key: str = "everything") -> list[RawSignal]:
+    def parse_everything_payload(
+        self, payload: dict, *, fetched_at: datetime, query_key: str = "everything"
+    ) -> list[RawSignal]:
         records = []
         for article in payload.get("articles", []):
             source_url = article.get("url")
@@ -131,9 +137,17 @@ class NewsAPIProvider(HTTPProvider):
                     request_url=f"{self.base_url}/{query_key}",
                     query_key=query_key,
                     language=article.get("language") or self.language,
-                    entities=[article.get("source", {}).get("name")] if article.get("source", {}).get("name") else [],
+                    entities=[article.get("source", {}).get("name")]
+                    if article.get("source", {}).get("name")
+                    else [],
                     region="Global",
-                    tags=_coerce_tags([query_key, article.get("source", {}).get("name", ""), _domain(source_url) or ""]),
+                    tags=_coerce_tags(
+                        [
+                            query_key,
+                            article.get("source", {}).get("name", ""),
+                            _domain(source_url) or "",
+                        ]
+                    ),
                     confidence=0.74,
                     provider_confidence=0.74,
                     content_hash=content_hash,
@@ -185,7 +199,9 @@ class AlphaVantageProvider(HTTPProvider):
             },
         )
         signals.extend(self.parse_news_payload(payload, fetched_at=end_at))
-        for symbol in [item.strip() for item in self.quote_symbols.split(",") if item.strip()]:
+        for symbol in [
+            item.strip() for item in self.quote_symbols.split(",") if item.strip()
+        ]:
             quote_payload = self._request(
                 "GET",
                 self.base_url,
@@ -195,10 +211,16 @@ class AlphaVantageProvider(HTTPProvider):
                     "apikey": api_key,
                 },
             )
-            signals.extend(self.parse_quote_payload(quote_payload, symbol=symbol, fetched_at=end_at))
+            signals.extend(
+                self.parse_quote_payload(
+                    quote_payload, symbol=symbol, fetched_at=end_at
+                )
+            )
         return signals
 
-    def parse_news_payload(self, payload: dict, *, fetched_at: datetime) -> list[RawSignal]:
+    def parse_news_payload(
+        self, payload: dict, *, fetched_at: datetime
+    ) -> list[RawSignal]:
         records = []
         for item in payload.get("feed", []):
             title = item.get("title") or "Untitled market item"
@@ -210,7 +232,10 @@ class AlphaVantageProvider(HTTPProvider):
             dedupe_hash = _hash_text(f"alphavantage::{title.lower().strip()}")
             tags = _coerce_tags(
                 [sentiment.get("topic", "") for sentiment in item.get("topics", [])]
-                + [ticker.get("ticker", "") for ticker in item.get("ticker_sentiment", [])[:4]]
+                + [
+                    ticker.get("ticker", "")
+                    for ticker in item.get("ticker_sentiment", [])[:4]
+                ]
             )
             records.append(
                 RawSignal(
@@ -241,7 +266,9 @@ class AlphaVantageProvider(HTTPProvider):
             )
         return records
 
-    def parse_quote_payload(self, payload: dict, *, symbol: str, fetched_at: datetime) -> list[RawSignal]:
+    def parse_quote_payload(
+        self, payload: dict, *, symbol: str, fetched_at: datetime
+    ) -> list[RawSignal]:
         quote = payload.get("Global Quote", {})
         if not quote:
             return []
@@ -329,10 +356,16 @@ class FredProvider(HTTPProvider):
                     "limit": 2,
                 },
             )
-            signals.extend(self.parse_observations_payload(obs, series_id=series_id, fetched_at=end_at))
+            signals.extend(
+                self.parse_observations_payload(
+                    obs, series_id=series_id, fetched_at=end_at
+                )
+            )
         return signals
 
-    def parse_updates_payload(self, payload: dict, *, fetched_at: datetime) -> list[RawSignal]:
+    def parse_updates_payload(
+        self, payload: dict, *, fetched_at: datetime
+    ) -> list[RawSignal]:
         records = []
         for item in payload.get("seriess", []):
             title = f"FRED updated {item.get('id', 'unknown series')}"
@@ -356,18 +389,28 @@ class FredProvider(HTTPProvider):
                     language="en",
                     entities=[item.get("id", "")],
                     region="US",
-                    tags=_coerce_tags([item.get("frequency", ""), item.get("units", ""), "fred-update"]),
+                    tags=_coerce_tags(
+                        [
+                            item.get("frequency", ""),
+                            item.get("units", ""),
+                            "fred-update",
+                        ]
+                    ),
                     confidence=0.82,
                     provider_confidence=0.82,
                     content_hash=content_hash,
-                    dedupe_hash=_hash_text(f"fred-update::{item.get('id', '')}::{fetched_at.date().isoformat()}"),
+                    dedupe_hash=_hash_text(
+                        f"fred-update::{item.get('id', '')}::{fetched_at.date().isoformat()}"
+                    ),
                     raw_payload_reference=f"{self.provider_name}:{item.get('id', content_hash[:16])}",
                     payload=item,
                 )
             )
         return records
 
-    def parse_observations_payload(self, payload: dict, *, series_id: str, fetched_at: datetime) -> list[RawSignal]:
+    def parse_observations_payload(
+        self, payload: dict, *, series_id: str, fetched_at: datetime
+    ) -> list[RawSignal]:
         observations = payload.get("observations", [])
         if not observations:
             return []
@@ -401,7 +444,9 @@ class FredProvider(HTTPProvider):
                 confidence=0.84,
                 provider_confidence=0.84,
                 content_hash=content_hash,
-                dedupe_hash=_hash_text(f"fred-obs::{series_id}::{latest.get('date', '')}"),
+                dedupe_hash=_hash_text(
+                    f"fred-obs::{series_id}::{latest.get('date', '')}"
+                ),
                 raw_payload_reference=f"{self.provider_name}:{series_id}:{latest.get('date', '')}",
                 payload={"latest": latest, "previous": previous},
             )
@@ -443,7 +488,9 @@ class GDELTProvider(HTTPProvider):
         )
         return self.parse_doc_payload(payload, fetched_at=end_at)
 
-    def parse_doc_payload(self, payload: dict, *, fetched_at: datetime) -> list[RawSignal]:
+    def parse_doc_payload(
+        self, payload: dict, *, fetched_at: datetime
+    ) -> list[RawSignal]:
         records = []
         articles = payload.get("articles") or payload.get("data") or []
         for item in articles:
@@ -482,7 +529,9 @@ class GDELTProvider(HTTPProvider):
                     confidence=0.68,
                     provider_confidence=0.68,
                     content_hash=content_hash,
-                    dedupe_hash=_hash_text(f"gdelt::{title.lower().strip()}::{_domain(source_url) or ''}"),
+                    dedupe_hash=_hash_text(
+                        f"gdelt::{title.lower().strip()}::{_domain(source_url) or ''}"
+                    ),
                     raw_payload_reference=f"{self.provider_name}:{source_url or content_hash[:16]}",
                     payload=item,
                 )
@@ -524,7 +573,9 @@ class WebSearchEnricher(HTTPProvider):
     def enabled(self) -> bool:
         return bool(os.getenv("OPENAI_API_KEY"))
 
-    def fetch_window(self, start_at: datetime, end_at: datetime) -> list[RawSignal]:  # pragma: no cover
+    def fetch_window(
+        self, start_at: datetime, end_at: datetime
+    ) -> list[RawSignal]:  # pragma: no cover
         # Required by ABC but unused — this enricher is called via query(), not fetch_window()
         return []
 
@@ -539,7 +590,9 @@ class WebSearchEnricher(HTTPProvider):
         """Derive a targeted fragility question from cluster metadata, optionally framed by a detected scenario."""
         topic = story_key.replace("_", " ")
         named = [e for e in entities if e and len(e) > 2][:4]
-        actor_clause = f" Key actors or entities involved: {', '.join(named)}." if named else ""
+        actor_clause = (
+            f" Key actors or entities involved: {', '.join(named)}." if named else ""
+        )
         if scenario_name and consequence_hint:
             context = (
                 f"In the context of the scenario '{scenario_name}', particularly regarding "
@@ -558,7 +611,9 @@ class WebSearchEnricher(HTTPProvider):
             " Cite specific recent events where possible."
         )
 
-    def query(self, question: str, *, story_key: str, fetched_at: datetime) -> list[RawSignal]:
+    def query(
+        self, question: str, *, story_key: str, fetched_at: datetime
+    ) -> list[RawSignal]:
         """Send one question via OpenAI web_search_preview and return signals per citation."""
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
@@ -587,7 +642,9 @@ class WebSearchEnricher(HTTPProvider):
                 ],
             },
         )
-        return self.parse_search_response(payload, story_key=story_key, fetched_at=fetched_at)
+        return self.parse_search_response(
+            payload, story_key=story_key, fetched_at=fetched_at
+        )
 
     def parse_search_response(
         self,
@@ -615,7 +672,9 @@ class WebSearchEnricher(HTTPProvider):
                 answer = block.get("text") or ""
                 for ann in block.get("annotations") or []:
                     if ann.get("type") == "url_citation" and ann.get("url"):
-                        citations.append({"url": ann["url"], "title": ann.get("title") or ""})
+                        citations.append(
+                            {"url": ann["url"], "title": ann.get("title") or ""}
+                        )
 
         if not answer:
             return []
@@ -645,7 +704,9 @@ class WebSearchEnricher(HTTPProvider):
                     confidence=0.82,
                     provider_confidence=0.82,
                     content_hash=content_hash,
-                    dedupe_hash=_hash_text(f"openai-websearch::{story_key}::{fetched_at.date().isoformat()}"),
+                    dedupe_hash=_hash_text(
+                        f"openai-websearch::{story_key}::{fetched_at.date().isoformat()}"
+                    ),
                     raw_payload_reference=f"{self.provider_name}:{content_hash[:16]}",
                     payload=payload,
                 )
@@ -656,7 +717,9 @@ class WebSearchEnricher(HTTPProvider):
             url = citation["url"]
             title = citation["title"] or f"Web synthesis: {story_key.replace('_', ' ')}"
             content_hash = _hash_text(_compact_text(story_key, url, answer[:200]))
-            dedupe_hash = _hash_text(f"openai-websearch::{_domain(url) or url}::{story_key}")
+            dedupe_hash = _hash_text(
+                f"openai-websearch::{_domain(url) or url}::{story_key}"
+            )
             records.append(
                 RawSignal(
                     id=content_hash[:16],
@@ -675,13 +738,20 @@ class WebSearchEnricher(HTTPProvider):
                     language="en",
                     entities=[_domain(url)] if _domain(url) else [],
                     region="Global",
-                    tags=_coerce_tags([story_key, "openai-websearch", "synthesis", _domain(url) or ""]),
+                    tags=_coerce_tags(
+                        [story_key, "openai-websearch", "synthesis", _domain(url) or ""]
+                    ),
                     confidence=0.82,
                     provider_confidence=0.82,
                     content_hash=content_hash,
                     dedupe_hash=dedupe_hash,
                     raw_payload_reference=f"{self.provider_name}:{url}",
-                    payload={"answer": answer, "citation_url": url, "citation_title": title, "all_citations": citations},
+                    payload={
+                        "answer": answer,
+                        "citation_url": url,
+                        "citation_title": title,
+                        "all_citations": citations,
+                    },
                 )
             )
         return records

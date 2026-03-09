@@ -89,14 +89,23 @@ class ReportBuilder:
             f"Antifragility attraction {assessment.antifragility_attraction.value:.2f}: beneficiaries include {', '.join(assessment.antifragile_nodes[:3])}.",
         ]
         ripple_map = ripple.first_order + ripple.second_order + ripple.third_order
-        opportunity_map = [] if publication_status != "publish" else [
-            f"{item.idea.direction.upper()} {', '.join(item.idea.related_assets_or_theme[:3])}: {item.idea.thesis}"
-            for item in approved
-        ]
+        opportunity_map = (
+            []
+            if publication_status != "publish"
+            else [
+                f"{item.idea.direction.upper()} {', '.join(item.idea.related_assets_or_theme[:3])}: {item.idea.thesis}"
+                for item in approved
+            ]
+        )
         execution_recommendations = (
-            [f"{item.idea.thesis} Invalidation: {item.idea.invalidation}" for item in approved]
+            [
+                f"{item.idea.thesis} Invalidation: {item.idea.invalidation}"
+                for item in approved
+            ]
             if publication_status == "publish"
-            else ["Monitor only. The structural topology is interesting, but evidence is not strong enough to publish an execution thesis."]
+            else [
+                "Monitor only. The structural topology is interesting, but evidence is not strong enough to publish an execution thesis."
+            ]
         )
         open_questions = [
             "Which weak signal would most clearly confirm that the bypass is gaining durable adoption?",
@@ -132,7 +141,9 @@ class ReportBuilder:
                 "pattern": pattern.model_dump(mode="json"),
                 "fragility": assessment.model_dump(mode="json"),
                 "ripple": ripple.model_dump(mode="json"),
-                "reviewed_opportunities": [item.model_dump(mode="json") for item in reviewed],
+                "reviewed_opportunities": [
+                    item.model_dump(mode="json") for item in reviewed
+                ],
                 "fallback": fallback_core.model_dump(mode="json"),
             },
             model_class=_FinalReportCore,
@@ -195,8 +206,12 @@ def render_markdown(report: FinalReport) -> str:
         lines += ["| Symbol | Company | Direction | Confidence | Rationale |"]
         lines += ["|--------|---------|-----------|------------|-----------|"]
         for opp in report.equity_opportunities:
-            arrow = {"long": "⬆ LONG", "short": "⬇ SHORT", "watch": "👁 WATCH"}.get(opp.direction, opp.direction.upper())
-            lines += [f"| {opp.symbol} | {opp.company_name} | {arrow} | {opp.confidence:.0%} | {opp.rationale} |"]
+            arrow = {"long": "⬆ LONG", "short": "⬇ SHORT", "watch": "👁 WATCH"}.get(
+                opp.direction, opp.direction.upper()
+            )
+            lines += [
+                f"| {opp.symbol} | {opp.company_name} | {arrow} | {opp.confidence:.0%} | {opp.rationale} |"
+            ]
         lines += [""]
 
     lines += [
@@ -225,15 +240,15 @@ def render_markdown(report: FinalReport) -> str:
         )
     lines.extend(
         [
-        "",
-        "## Open Questions",
-        *[f"- {item}" for item in report.open_questions],
-        "",
-        "## Invalidation Signals",
-        *[f"- {item}" for item in report.invalidation_signals],
-        "",
-        "## Provenance",
-        *[f"- {item}" for item in report.provenance],
+            "",
+            "## Open Questions",
+            *[f"- {item}" for item in report.open_questions],
+            "",
+            "## Invalidation Signals",
+            *[f"- {item}" for item in report.invalidation_signals],
+            "",
+            "## Provenance",
+            *[f"- {item}" for item in report.provenance],
         ]
     )
     return "\n".join(lines)

@@ -45,7 +45,14 @@ class StructuredReasoner:
     def enabled(self) -> bool:
         return bool(self.api_key)
 
-    def refine_model(self, *, system_prompt: str, user_payload: dict[str, Any], model_class: type[T], fallback: T) -> tuple[T, dict[str, Any]]:
+    def refine_model(
+        self,
+        *,
+        system_prompt: str,
+        user_payload: dict[str, Any],
+        model_class: type[T],
+        fallback: T,
+    ) -> tuple[T, dict[str, Any]]:
         if not self.enabled:
             return fallback, {"llm_used": False, "llm_status": "disabled"}
         schema = _enforce_additional_properties(model_class.model_json_schema())
@@ -90,10 +97,16 @@ class StructuredReasoner:
             error_body: str | None = None
             if isinstance(exc, httpx.HTTPStatusError):
                 error_body = exc.response.text[:1000]
-                logger.warning("OpenAI API %s: %s", exc.response.status_code, error_body)
+                logger.warning(
+                    "OpenAI API %s: %s", exc.response.status_code, error_body
+                )
             else:
                 logger.warning("LLM call failed (%s): %s", type(exc).__name__, exc)
-            diag: dict[str, Any] = {"llm_used": True, "llm_status": "fallback", "llm_error": str(exc)}
+            diag: dict[str, Any] = {
+                "llm_used": True,
+                "llm_status": "fallback",
+                "llm_error": str(exc),
+            }
             if error_body:
                 diag["llm_error_body"] = error_body
             return fallback, diag

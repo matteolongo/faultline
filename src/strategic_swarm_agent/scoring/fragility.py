@@ -1,11 +1,41 @@
 from __future__ import annotations
 
-from strategic_swarm_agent.models import AbstractPattern, EventCluster, FragilityAssessment, ScoreDetail, SignalBundle, SignalEvent
+from strategic_swarm_agent.models import (
+    AbstractPattern,
+    EventCluster,
+    FragilityAssessment,
+    ScoreDetail,
+    SignalBundle,
+    SignalEvent,
+)
 from strategic_swarm_agent.utils.config import load_archetypes, load_scoring_config
 
-HIGH_DEFENSE_TAGS = {"chokepoint", "grid", "debt", "undersea", "compliance", "carrier", "cloud"}
-LOW_COST_DISRUPTOR_TAGS = {"bypass", "open-source", "protocol", "microgrid", "stablecoin", "sabotage"}
-ANTIFRAGILE_TAGS = {"microgrid", "open-source", "protocol", "resilience", "bypass", "monitoring", "settlement"}
+HIGH_DEFENSE_TAGS = {
+    "chokepoint",
+    "grid",
+    "debt",
+    "undersea",
+    "compliance",
+    "carrier",
+    "cloud",
+}
+LOW_COST_DISRUPTOR_TAGS = {
+    "bypass",
+    "open-source",
+    "protocol",
+    "microgrid",
+    "stablecoin",
+    "sabotage",
+}
+ANTIFRAGILE_TAGS = {
+    "microgrid",
+    "open-source",
+    "protocol",
+    "resilience",
+    "bypass",
+    "monitoring",
+    "settlement",
+}
 
 
 class FragilityScorer:
@@ -28,7 +58,18 @@ class FragilityScorer:
 
         hubris_value = self._bounded(
             0.25
-            + 0.12 * len(tags.intersection({"incumbent", "deterrence", "compliance", "repair-delay", "defensive-doctrine"}))
+            + 0.12
+            * len(
+                tags.intersection(
+                    {
+                        "incumbent",
+                        "deterrence",
+                        "compliance",
+                        "repair-delay",
+                        "defensive-doctrine",
+                    }
+                )
+            )
             + 0.08 * len(tags.intersection({"debt", "refinancing", "pricing-power"}))
         )
         energy_defense_value = self._bounded(
@@ -38,18 +79,54 @@ class FragilityScorer:
         )
         kinetic_ripple_value = self._bounded(
             0.24
-            + 0.13 * len(tags.intersection({"market-stress", "funding-stress", "shipping", "insurance", "cloud-spend"}))
-            + 0.08 * len(tags.intersection({"undersea", "grid", "payment-rail", "developer-flight"}))
+            + 0.13
+            * len(
+                tags.intersection(
+                    {
+                        "market-stress",
+                        "funding-stress",
+                        "shipping",
+                        "insurance",
+                        "cloud-spend",
+                    }
+                )
+            )
+            + 0.08
+            * len(
+                tags.intersection(
+                    {"undersea", "grid", "payment-rail", "developer-flight"}
+                )
+            )
         )
         centralization_value = self._bounded(
-            0.3 + 0.1 * len(tags.intersection({"chokepoint", "central-hub", "grid", "incumbent", "treasury", "carrier"}))
+            0.3
+            + 0.1
+            * len(
+                tags.intersection(
+                    {
+                        "chokepoint",
+                        "central-hub",
+                        "grid",
+                        "incumbent",
+                        "treasury",
+                        "carrier",
+                    }
+                )
+            )
         )
         redundancy_value = self._bounded(
             0.18
-            + 0.12 * len(tags.intersection({"bypass", "microgrid", "open-source", "redundancy", "protocol"}))
+            + 0.12
+            * len(
+                tags.intersection(
+                    {"bypass", "microgrid", "open-source", "redundancy", "protocol"}
+                )
+            )
         )
         antifragility_value = self._bounded(
-            0.25 + 0.1 * len(tags.intersection(ANTIFRAGILE_TAGS)) + (bundle.sentiment_entropy.value * 0.12 if bundle else 0.0)
+            0.25
+            + 0.1 * len(tags.intersection(ANTIFRAGILE_TAGS))
+            + (bundle.sentiment_entropy.value * 0.12 if bundle else 0.0)
         )
         weights = self.scoring["weights"]
         tag_pressure = sum(self.scoring["tag_weights"].get(tag, 0.0) for tag in tags)
@@ -127,7 +204,9 @@ class FragilityScorer:
     def _antifragile_nodes(self, tags: set[str]) -> list[str]:
         nodes = []
         if {"undersea", "bypass", "monitoring"}.intersection(tags):
-            nodes.extend(["alternate route infrastructure", "network resilience software"])
+            nodes.extend(
+                ["alternate route infrastructure", "network resilience software"]
+            )
         if {"open-source", "protocol", "developer-flight"}.intersection(tags):
             nodes.extend(["developer infrastructure", "interoperability tooling"])
         if {"stablecoin", "payment-rail", "settlement"}.intersection(tags):

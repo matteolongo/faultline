@@ -23,6 +23,7 @@ For live mode set:
 And ensure OPENAI_API_KEY (and optionally NEWSAPI_KEY, ALPHAVANTAGE_KEY, FRED_API_KEY)
 are present in your .env file or the Studio environment.
 """
+
 from __future__ import annotations
 
 import os

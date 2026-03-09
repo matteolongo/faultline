@@ -25,16 +25,22 @@ def build_parser() -> argparse.ArgumentParser:
     run_all = subparsers.add_parser("run-all-demos", help="Run all sample scenarios")
     run_all.add_argument("--output-dir", default=None)
 
-    evaluate = subparsers.add_parser("evaluate", help="Run one scenario and score the output")
+    evaluate = subparsers.add_parser(
+        "evaluate", help="Run one scenario and score the output"
+    )
     evaluate.add_argument("--scenario", required=True)
     evaluate.add_argument("--output-dir", default=None)
 
-    ingest = subparsers.add_parser("ingest-window", help="Fetch and process a live time window")
+    ingest = subparsers.add_parser(
+        "ingest-window", help="Fetch and process a live time window"
+    )
     ingest.add_argument("--start", required=True)
     ingest.add_argument("--end", required=True)
     ingest.add_argument("--output-dir", default=None)
 
-    run_latest = subparsers.add_parser("run-latest", help="Run the latest live lookback window")
+    run_latest = subparsers.add_parser(
+        "run-latest", help="Run the latest live lookback window"
+    )
     run_latest.add_argument("--lookback-minutes", type=int, default=None)
     run_latest.add_argument("--output-dir", default=None)
 
@@ -49,7 +55,9 @@ def build_parser() -> argparse.ArgumentParser:
     backfill.add_argument("--step-minutes", type=int, default=60)
     backfill.add_argument("--output-dir", default=None)
 
-    replay = subparsers.add_parser("replay", help="Replay a previous run or stored time window")
+    replay = subparsers.add_parser(
+        "replay", help="Replay a previous run or stored time window"
+    )
     replay.add_argument("--run-id", default=None)
     replay.add_argument("--start", default=None)
     replay.add_argument("--end", default=None)
@@ -60,10 +68,14 @@ def build_parser() -> argparse.ArgumentParser:
     signals.add_argument("--provider", default=None)
     signals.add_argument("--output-dir", default=None)
 
-    health = subparsers.add_parser("provider-health", help="Show provider configuration and recent status")
+    health = subparsers.add_parser(
+        "provider-health", help="Show provider configuration and recent status"
+    )
     health.add_argument("--output-dir", default=None)
 
-    goldset = subparsers.add_parser("evaluate-goldset", help="Evaluate all sample scenarios")
+    goldset = subparsers.add_parser(
+        "evaluate-goldset", help="Evaluate all sample scenarios"
+    )
     goldset.add_argument("--output-dir", default=None)
     return parser
 
@@ -78,7 +90,11 @@ def main() -> None:
 
     if args.command == "run-demo":
         result = runner.run_demo(args.scenario)
-        print(json.dumps({"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2))
+        print(
+            json.dumps(
+                {"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2
+            )
+        )
         return
 
     if args.command == "run-all-demos":
@@ -105,18 +121,30 @@ def main() -> None:
         return
 
     if args.command == "ingest-window":
-        result = runner.ingest_window(start_at=_parse_datetime(args.start), end_at=_parse_datetime(args.end))
+        result = runner.ingest_window(
+            start_at=_parse_datetime(args.start), end_at=_parse_datetime(args.end)
+        )
         print(json.dumps(result, indent=2))
         return
 
     if args.command == "run-live":
-        result = runner.run_live(start_at=_parse_datetime(args.start), end_at=_parse_datetime(args.end))
-        print(json.dumps({"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2))
+        result = runner.run_live(
+            start_at=_parse_datetime(args.start), end_at=_parse_datetime(args.end)
+        )
+        print(
+            json.dumps(
+                {"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2
+            )
+        )
         return
 
     if args.command == "run-latest":
         result = runner.run_latest(lookback_minutes=args.lookback_minutes)
-        print(json.dumps({"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2))
+        print(
+            json.dumps(
+                {"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2
+            )
+        )
         return
 
     if args.command == "backfill":
@@ -125,7 +153,15 @@ def main() -> None:
             end_at=_parse_datetime(args.end),
             step_minutes=args.step_minutes,
         )
-        print(json.dumps([{"run_id": item["run_id"], "run_dir": item["run_dir"]} for item in results], indent=2))
+        print(
+            json.dumps(
+                [
+                    {"run_id": item["run_id"], "run_dir": item["run_dir"]}
+                    for item in results
+                ],
+                indent=2,
+            )
+        )
         return
 
     if args.command == "replay":
@@ -134,11 +170,20 @@ def main() -> None:
             start_at=_parse_datetime(args.start) if args.start else None,
             end_at=_parse_datetime(args.end) if args.end else None,
         )
-        print(json.dumps({"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2))
+        print(
+            json.dumps(
+                {"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2
+            )
+        )
         return
 
     if args.command == "list-signals":
-        print(json.dumps(runner.list_signals(limit=args.limit, provider_name=args.provider), indent=2))
+        print(
+            json.dumps(
+                runner.list_signals(limit=args.limit, provider_name=args.provider),
+                indent=2,
+            )
+        )
         return
 
     if args.command == "provider-health":

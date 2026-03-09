@@ -10,7 +10,14 @@ from pathlib import Path
 from typing import Any, Iterator
 from urllib.parse import urlparse
 
-from strategic_swarm_agent.models import DeadLetterRecord, EventCluster, ProviderHealthStatus, PublishedReport, RawSignal, SignalEvent
+from strategic_swarm_agent.models import (
+    DeadLetterRecord,
+    EventCluster,
+    ProviderHealthStatus,
+    PublishedReport,
+    RawSignal,
+    SignalEvent,
+)
 from strategic_swarm_agent.utils.io import ensure_directory, serialize_model
 
 try:  # pragma: no cover - optional dependency path
@@ -21,15 +28,27 @@ except Exception:  # pragma: no cover - sqlite remains the default test path
 
 class SignalStore:
     def __init__(self, database_url: str | None = None) -> None:
-        self.database_url = database_url or os.getenv("SWARM_DATABASE_URL", "sqlite:///outputs/swarm_runs.sqlite")
+        self.database_url = database_url or os.getenv(
+            "SWARM_DATABASE_URL", "sqlite:///outputs/swarm_runs.sqlite"
+        )
         self.scheme = urlparse(self.database_url).scheme or "sqlite"
         if self.scheme in {"", "sqlite"}:
             parsed = urlparse(self.database_url)
             if parsed.scheme:
-                db_path = parsed.path if parsed.path else self.database_url.replace("sqlite:///", "")
+                db_path = (
+                    parsed.path
+                    if parsed.path
+                    else self.database_url.replace("sqlite:///", "")
+                )
             else:
                 db_path = self.database_url.replace("sqlite:///", "")
-            if parsed.scheme and db_path.startswith("/") and not db_path.startswith(("/Users/", "/private/", "/tmp/", "/var/", "/home/")):
+            if (
+                parsed.scheme
+                and db_path.startswith("/")
+                and not db_path.startswith(
+                    ("/Users/", "/private/", "/tmp/", "/var/", "/home/")
+                )
+            ):
                 db_path = db_path.lstrip("/")
             elif not db_path.startswith("/") and parsed.scheme:
                 db_path = f"/{db_path}"
@@ -199,7 +218,9 @@ class SignalStore:
             for column_name, column_type in columns.items():
                 if column_name not in existing:
                     try:
-                        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+                        cursor.execute(
+                            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                        )
                     except sqlite3.OperationalError as exc:
                         if "duplicate column name" not in str(exc):
                             raise
@@ -208,7 +229,9 @@ class SignalStore:
         if not dedupe_hashes:
             return set()
         placeholders = ",".join([self._placeholder()] * len(dedupe_hashes))
-        query = f"SELECT dedupe_hash FROM raw_signals WHERE dedupe_hash IN ({placeholders})"
+        query = (
+            f"SELECT dedupe_hash FROM raw_signals WHERE dedupe_hash IN ({placeholders})"
+        )
         with self.connection() as connection:
             cursor = connection.cursor()
             cursor.execute(query, dedupe_hashes)
@@ -260,7 +283,9 @@ class SignalStore:
                 signal.region,
                 signal.language,
                 signal.timestamp.isoformat(),
-                signal.fetched_at.isoformat() if signal.fetched_at else signal.timestamp.isoformat(),
+                signal.fetched_at.isoformat()
+                if signal.fetched_at
+                else signal.timestamp.isoformat(),
                 signal.published_at.isoformat() if signal.published_at else None,
                 signal.confidence,
                 signal.provider_confidence,
@@ -344,7 +369,9 @@ class SignalStore:
         with self.connection() as connection:
             connection.cursor().executemany(sql, rows)
 
-    def list_raw_signals(self, *, limit: int = 25, provider_name: str | None = None) -> list[dict[str, Any]]:
+    def list_raw_signals(
+        self, *, limit: int = 25, provider_name: str | None = None
+    ) -> list[dict[str, Any]]:
         if self.scheme.startswith("postgres"):
             sql = "SELECT provider_name, source_family, title, timestamp, raw_payload_reference FROM raw_signals"
             params: list[Any] = []
@@ -375,7 +402,9 @@ class SignalStore:
                 for row in cursor.fetchall()
             ]
 
-    def load_raw_signals_for_window(self, start_at: datetime, end_at: datetime) -> list[RawSignal]:
+    def load_raw_signals_for_window(
+        self, start_at: datetime, end_at: datetime
+    ) -> list[RawSignal]:
         operator_start = self._placeholder()
         operator_end = self._placeholder()
         sql = (
@@ -532,7 +561,9 @@ class SignalStore:
                 ),
             )
 
-    def provider_health(self, provider_names: list[tuple[str, str, bool]]) -> list[ProviderHealthStatus]:
+    def provider_health(
+        self, provider_names: list[tuple[str, str, bool]]
+    ) -> list[ProviderHealthStatus]:
         with self.connection() as connection:
             cursor = connection.cursor()
             cutoff = (datetime.now(UTC) - timedelta(days=7)).isoformat()

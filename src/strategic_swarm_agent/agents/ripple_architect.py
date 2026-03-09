@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from strategic_swarm_agent.llm.backend import StructuredReasoner
-from strategic_swarm_agent.models import AbstractPattern, EventCluster, FragilityAssessment, RippleScenario, SignalBundle, SignalEvent
+from strategic_swarm_agent.models import (
+    AbstractPattern,
+    EventCluster,
+    FragilityAssessment,
+    RippleScenario,
+    SignalBundle,
+    SignalEvent,
+)
 from strategic_swarm_agent.utils.config import load_prompts
 
 
@@ -39,8 +46,16 @@ class RippleArchitect:
                 "Capital rotates toward resilience, monitoring, and redundant network operators.",
                 "Defense spending becomes less important than route optionality and survivability software.",
             ]
-            helped = ["network resilience", "monitoring software", "alternate route infrastructure"]
-            hurt = ["incumbent corridor operators", "repair-dependent cable assets", "route-concentrated logistics"]
+            helped = [
+                "network resilience",
+                "monitoring software",
+                "alternate route infrastructure",
+            ]
+            hurt = [
+                "incumbent corridor operators",
+                "repair-dependent cable assets",
+                "route-concentrated logistics",
+            ]
         elif pattern.pattern_name == "Monolith vs Protocol":
             first_order = [
                 "Developer experimentation shifts toward open components and lower switching-cost stacks.",
@@ -54,8 +69,16 @@ class RippleArchitect:
                 "The market rewards picks-and-shovels exposure rather than the obvious direct product challenger.",
                 "Open commodity pressure compresses margins but expands the surrounding ecosystem.",
             ]
-            helped = ["developer infrastructure", "model optimization", "interoperability tooling"]
-            hurt = ["bundled SaaS incumbents", "closed premium model layers", "high-margin AI wrappers"]
+            helped = [
+                "developer infrastructure",
+                "model optimization",
+                "interoperability tooling",
+            ]
+            hurt = [
+                "bundled SaaS incumbents",
+                "closed premium model layers",
+                "high-margin AI wrappers",
+            ]
         elif pattern.pattern_name == "Heavy Capital vs Light Network":
             first_order = [
                 "Funding spreads increase the cost of defending the incumbent balance sheet.",
@@ -69,8 +92,16 @@ class RippleArchitect:
                 "Capital rotates toward neutral rails, settlement infrastructure, and balance-sheet-light enablers.",
                 "The visible debt problem becomes a distribution and trust problem across the financial stack.",
             ]
-            helped = ["settlement infrastructure", "collateral software", "risk transfer platforms"]
-            hurt = ["levered sovereign proxies", "balance-sheet-heavy lenders", "policy-dependent intermediaries"]
+            helped = [
+                "settlement infrastructure",
+                "collateral software",
+                "risk transfer platforms",
+            ]
+            hurt = [
+                "levered sovereign proxies",
+                "balance-sheet-heavy lenders",
+                "policy-dependent intermediaries",
+            ]
         else:
             first_order = [
                 "The dominant system absorbs immediate repair, defense, or compliance costs.",
@@ -92,7 +123,9 @@ class RippleArchitect:
             f"Favor indirect beneficiaries because {pattern.disruptor_actor} changes the cost curve more than the headline alone implies.",
         ]
         if bundle and bundle.sentiment_entropy.value > 0.55:
-            third_order.append("Social and narrative fragmentation keep the shock alive longer than a single event window.")
+            third_order.append(
+                "Social and narrative fragmentation keep the shock alive longer than a single event window."
+            )
 
         fallback = RippleScenario(
             trigger=trigger,

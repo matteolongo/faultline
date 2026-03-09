@@ -30,7 +30,9 @@ def load_archetypes() -> dict[str, Any]:
         for item in payload["historical_analogs"]
     }
     topologies = [Archetype.model_validate(item) for item in payload["topologies"]]
-    fragility_patterns = [FragilityPattern.model_validate(item) for item in payload["fragility_patterns"]]
+    fragility_patterns = [
+        FragilityPattern.model_validate(item) for item in payload["fragility_patterns"]
+    ]
     return {
         "version": payload["version"],
         "topologies": topologies,

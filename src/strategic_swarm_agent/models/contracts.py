@@ -50,9 +50,15 @@ class RawSignal(BaseModel):
         if self.provider_confidence is None:
             self.provider_confidence = self.confidence
         if self.content_hash is None:
-            self.content_hash = hashlib.sha256(f"{self.title} {self.summary}".encode("utf-8")).hexdigest()
+            self.content_hash = hashlib.sha256(
+                f"{self.title} {self.summary}".encode("utf-8")
+            ).hexdigest()
         if self.dedupe_hash is None:
-            self.dedupe_hash = hashlib.sha256(f"{(self.source_url or '').lower()}::{self.title.lower().strip()}".encode("utf-8")).hexdigest()
+            self.dedupe_hash = hashlib.sha256(
+                f"{(self.source_url or '').lower()}::{self.title.lower().strip()}".encode(
+                    "utf-8"
+                )
+            ).hexdigest()
         if self.raw_payload_reference is None:
             self.raw_payload_reference = f"{self.provider_name}:{self.provider_item_id}"
         return self

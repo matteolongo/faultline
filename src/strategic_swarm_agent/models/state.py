@@ -6,8 +6,8 @@ from typing_extensions import TypedDict
 
 from strategic_swarm_agent.models.contracts import (
     AbstractPattern,
-    EventCluster,
     EquityOpportunity,
+    EventCluster,
     FinalReport,
     FragilityAssessment,
     OpportunityIdea,

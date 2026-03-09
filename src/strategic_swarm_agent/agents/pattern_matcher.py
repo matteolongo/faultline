@@ -3,7 +3,12 @@ from __future__ import annotations
 from collections import Counter
 
 from strategic_swarm_agent.llm.backend import StructuredReasoner
-from strategic_swarm_agent.models import AbstractPattern, EventCluster, HistoricalAnalog, SignalEvent
+from strategic_swarm_agent.models import (
+    AbstractPattern,
+    EventCluster,
+    HistoricalAnalog,
+    SignalEvent,
+)
 from strategic_swarm_agent.utils.config import load_archetypes, load_prompts
 
 EMPIRE_KEYWORDS = {
@@ -38,7 +43,9 @@ class PatternMatcher:
         self.prompts = load_prompts()
         self.reasoner = reasoner or StructuredReasoner()
 
-    def match(self, events: list[SignalEvent], cluster: EventCluster | None = None) -> tuple[list[AbstractPattern], dict]:
+    def match(
+        self, events: list[SignalEvent], cluster: EventCluster | None = None
+    ) -> tuple[list[AbstractPattern], dict]:
         if not events:
             return [], {"llm_used": False, "llm_status": "empty"}
         if cluster is None:
@@ -56,26 +63,35 @@ class PatternMatcher:
                 first_seen_at=min(event.timestamp for event in events),
                 last_seen_at=max(event.timestamp for event in events),
                 novelty_score=max(event.novelty for event in events),
-                agreement_score=min(1.0, 0.2 + len({event.source for event in events}) * 0.25),
+                agreement_score=min(
+                    1.0, 0.2 + len({event.source for event in events}) * 0.25
+                ),
                 cluster_strength=min(1.0, 0.3 + len(events) * 0.1),
             )
 
         tag_pool = {tag for event in events for tag in event.tags}
         text_pool = " ".join(
-            " ".join([event.title, event.summary, *event.entities]).lower() for event in events
+            " ".join([event.title, event.summary, *event.entities]).lower()
+            for event in events
         )
         scored = []
         for archetype in self.archetypes["topologies"]:
             overlap = len(tag_pool.intersection(set(archetype.trigger_tags)))
-            keyword_bonus = sum(1 for token in archetype.name.lower().split() if token in text_pool)
+            keyword_bonus = sum(
+                1 for token in archetype.name.lower().split() if token in text_pool
+            )
             score = overlap + keyword_bonus * 0.35
             scored.append((score, archetype))
 
         _, best = max(scored, key=lambda item: item[0])
-        analogs = [self.archetypes["historical_analogs"][ref] for ref in best.analog_refs]
+        analogs = [
+            self.archetypes["historical_analogs"][ref] for ref in best.analog_refs
+        ]
 
         empire_actor = self._select_actor(events, EMPIRE_KEYWORDS)
-        disruptor_actor = self._select_actor(events, DISRUPTOR_KEYWORDS, fallback_avoid=empire_actor)
+        disruptor_actor = self._select_actor(
+            events, DISRUPTOR_KEYWORDS, fallback_avoid=empire_actor
+        )
         cheap_weapon = self._infer_cheap_weapon(best.name, tag_pool)
         armor_breach = self._infer_armor_breach(best.name, tag_pool)
 
@@ -84,7 +100,9 @@ class PatternMatcher:
             f"{', '.join(sorted(tag_pool.intersection(set(best.trigger_tags)))[:4]) or 'structural pressure'} "
             f"and the incumbent must defend a wider surface area than the disruptor."
         )
-        confidence = min(0.95, 0.42 + len(tag_pool.intersection(set(best.trigger_tags))) * 0.08)
+        confidence = min(
+            0.95, 0.42 + len(tag_pool.intersection(set(best.trigger_tags))) * 0.08
+        )
 
         fallback = AbstractPattern(
             pattern_name=best.name,
@@ -154,7 +172,9 @@ class PatternMatcher:
         if "Monolith vs Protocol" in pattern_name:
             return "Developer adoption can move faster than enterprise repricing and roadmap defense."
         if "Heavy Capital vs Light Network" in pattern_name:
-            return "Funding costs compound while users migrate to cheaper modular rails."
+            return (
+                "Funding costs compound while users migrate to cheaper modular rails."
+            )
         if "Central Grid vs Micro-Network" in pattern_name:
             return "Local resilience demand rises after each central outage and weakens the utility monopoly."
         if "debt" in tags:

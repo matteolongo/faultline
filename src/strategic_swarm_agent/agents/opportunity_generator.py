@@ -12,11 +12,21 @@ DIRECT_THEME_KEYWORDS = {
 
 
 class OpportunityGenerator:
-    def generate(self, scenarios: list[RippleScenario], retry_count: int = 0) -> list[OpportunityIdea]:
+    def generate(
+        self, scenarios: list[RippleScenario], retry_count: int = 0
+    ) -> list[OpportunityIdea]:
         ideas: list[OpportunityIdea] = []
         for scenario in scenarios:
-            helped_theme = scenario.sectors_helped[0] if scenario.sectors_helped else "resilience infrastructure"
-            hurt_theme = scenario.sectors_hurt[0] if scenario.sectors_hurt else "fragile centralized assets"
+            helped_theme = (
+                scenario.sectors_helped[0]
+                if scenario.sectors_helped
+                else "resilience infrastructure"
+            )
+            hurt_theme = (
+                scenario.sectors_hurt[0]
+                if scenario.sectors_hurt
+                else "fragile centralized assets"
+            )
 
             primary = self._build_idea(
                 thesis=f"Long the indirect beneficiaries of {helped_theme} demand as the system rerates toward resilience.",
@@ -44,7 +54,11 @@ class OpportunityGenerator:
                 thesis="Own picks-and-shovels software that benefits regardless of which bypass winner captures the narrative.",
                 direction="long",
                 exposure_type="theme",
-                related_assets_or_theme=["monitoring software", "orchestration tooling", "risk intelligence"],
+                related_assets_or_theme=[
+                    "monitoring software",
+                    "orchestration tooling",
+                    "risk intelligence",
+                ],
                 catalyst="Budgets shift from defending the old perimeter to coordinating new distributed systems.",
                 invalidation="Buyers treat the shock as temporary and stop funding resilience tooling.",
                 time_horizon="6 to 24 months",

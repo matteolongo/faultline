@@ -35,7 +35,9 @@ class SampleProvider(SignalProvider):
         return [RawSignal.model_validate(record) for record in records]
 
     def fetch_window(self, start_at: datetime, end_at: datetime) -> list[RawSignal]:
-        raise NotImplementedError("Sample providers are scenario-based only. Use fetch(scenario_id).")
+        raise NotImplementedError(
+            "Sample providers are scenario-based only. Use fetch(scenario_id)."
+        )
 
 
 class NewsSignalProvider(SampleProvider):

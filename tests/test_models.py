@@ -1,6 +1,11 @@
 from datetime import datetime, timezone
 
-from strategic_swarm_agent.models import FinalReport, OpportunityIdea, ScoreDetail, SignalEvent
+from strategic_swarm_agent.models import (
+    FinalReport,
+    OpportunityIdea,
+    ScoreDetail,
+    SignalEvent,
+)
 
 
 def test_signal_event_model_validates_required_fields() -> None:
