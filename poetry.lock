@@ -516,10 +516,9 @@ files = [
 name = "click"
 version = "8.3.1"
 description = "Composable command line interface toolkit"
-optional = true
+optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "extra == \"operator\""
 files = [
     {file = "click-8.3.1-py3-none-any.whl", hash = "sha256:981153a64e25f12d547d3426c367a4857371575ee7ad18df2a6183ab0545b2a6"},
     {file = "click-8.3.1.tar.gz", hash = "sha256:12ff4785d337a1bb490bb7e9c2b1ee5da3112e94a8622f26a6c77f5d2fc6842a"},
@@ -532,10 +531,10 @@ colorama = {version = "*", markers = "platform_system == \"Windows\""}
 name = "colorama"
 version = "0.4.6"
 description = "Cross-platform colored terminal text."
-optional = true
+optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
 groups = ["main"]
-markers = "sys_platform == \"win32\" and (extra == \"dev\" or extra == \"operator\") or extra == \"operator\" and platform_system == \"Windows\""
+markers = "(extra == \"dev\" or extra == \"operator\") and sys_platform == \"win32\" or platform_system == \"Windows\""
 files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
@@ -1411,6 +1410,25 @@ files = [
 [package.dependencies]
 langchain-core = ">=0.2.38"
 ormsgpack = ">=1.12.0"
+
+[[package]]
+name = "langgraph-cli"
+version = "0.4.14"
+description = "CLI for interacting with LangGraph API"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "langgraph_cli-0.4.14-py3-none-any.whl", hash = "sha256:42ad7e56b512a3c260b205f7623d2e2cc0b245463961810fcc44482200374b4b"},
+    {file = "langgraph_cli-0.4.14.tar.gz", hash = "sha256:ba6bc715651d85ba94d14d6c53db87b4bf478cf45d61a28af9c8dee629f3cf1f"},
+]
+
+[package.dependencies]
+click = ">=8.1.7"
+langgraph-sdk = {version = ">=0.1.0", markers = "python_version >= \"3.11\""}
+
+[package.extras]
+inmem = ["langgraph-api (>=0.5.35,<0.8.0) ; python_version >= \"3.11\"", "langgraph-runtime-inmem (>=0.7) ; python_version >= \"3.11\"", "python-dotenv (>=0.8.0)"]
 
 [[package]]
 name = "langgraph-prebuilt"
@@ -4081,4 +4099,4 @@ operator = ["ipykernel", "jupyterlab", "streamlit"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11"
-content-hash = "b430263a1b2cfcddc22a7d4198df864bc9e7ce04902c3a9fac84b7ce2eb2ce81"
+content-hash = "789d3efabf9bd6442478b855c6f21a7c8cf46e0564c953551989792d382ec7e5"
