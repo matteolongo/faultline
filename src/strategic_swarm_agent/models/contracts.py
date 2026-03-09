@@ -196,6 +196,27 @@ class FinalReport(BaseModel):
     invalidation_signals: list[str] = Field(default_factory=list)
     provenance: list[str] = Field(default_factory=list)
     monitor_only_reason: str | None = None
+    detected_scenario: "ScenarioDetection | None" = None
+    equity_opportunities: "list[EquityOpportunity]" = Field(default_factory=list)
+
+
+class ScenarioDetection(BaseModel):
+    scenario_name: str
+    scenario_type: str  # geopolitical_conflict | trade_war | energy_crisis | monetary_policy | social_unrest | other
+    key_actors: list[str] = Field(default_factory=list)
+    geographic_scope: list[str] = Field(default_factory=list)
+    consequence_chain: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0, default=0.5)
+
+
+class EquityOpportunity(BaseModel):
+    symbol: str
+    company_name: str
+    direction: str  # "long" | "short" | "watch"
+    rationale: str
+    scenario_link: str
+    confidence: float = Field(ge=0.0, le=1.0, default=0.5)
+    search_summary: str | None = None
 
 
 class Archetype(BaseModel):

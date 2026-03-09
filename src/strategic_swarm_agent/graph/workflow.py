@@ -54,6 +54,7 @@ from strategic_swarm_agent.agents.ripple_architect import RippleArchitect
 from strategic_swarm_agent.agents.signal_alchemist import SignalAlchemist
 from strategic_swarm_agent.llm.backend import StructuredReasoner
 from strategic_swarm_agent.models import SwarmGraphState
+from strategic_swarm_agent.models.contracts import EquityOpportunity, ScenarioDetection
 from strategic_swarm_agent.persistence.store import SignalStore, make_dead_letter
 from strategic_swarm_agent.providers.normalizer import SignalNormalizer
 from strategic_swarm_agent.providers.base import ProviderError, SignalProvider
@@ -93,7 +94,9 @@ class StrategicSwarmWorkflow:
         graph.add_node("ingest_signals", self.ingest_signals)
         graph.add_node("normalize_events", self.normalize_events)
         graph.add_node("pattern_match", self.pattern_match)
+        graph.add_node("detect_scenario", self.detect_scenario)
         graph.add_node("enrich_dark_signals", self.enrich_dark_signals)
+        graph.add_node("map_equity_opportunities", self.map_equity_opportunities)
         graph.add_node("compute_fragility", self.compute_fragility)
         graph.add_node("build_ripple_graph", self.build_ripple_graph)
         graph.add_node("generate_opportunities", self.generate_opportunities)
@@ -104,8 +107,10 @@ class StrategicSwarmWorkflow:
         graph.add_edge(START, "ingest_signals")
         graph.add_edge("ingest_signals", "normalize_events")
         graph.add_edge("normalize_events", "pattern_match")
-        graph.add_edge("pattern_match", "enrich_dark_signals")
-        graph.add_edge("enrich_dark_signals", "compute_fragility")
+        graph.add_edge("pattern_match", "detect_scenario")
+        graph.add_edge("detect_scenario", "enrich_dark_signals")
+        graph.add_edge("enrich_dark_signals", "map_equity_opportunities")
+        graph.add_edge("map_equity_opportunities", "compute_fragility")
         graph.add_edge("compute_fragility", "build_ripple_graph")
         graph.add_edge("build_ripple_graph", "generate_opportunities")
         graph.add_edge("generate_opportunities", "critique_execution")
@@ -201,6 +206,53 @@ class StrategicSwarmWorkflow:
         provenance = [*state["provenance"], f"Matched topology {patterns[0].pattern_name}."] if patterns else [*state["provenance"], "Pattern match skipped."]
         return {"abstract_patterns": patterns, "diagnostics": diagnostics, "provenance": provenance}
 
+    def detect_scenario(self, state: SwarmGraphState) -> SwarmGraphState:
+        clusters = state.get("event_clusters") or []
+        patterns = state.get("abstract_patterns") or []
+        if not clusters:
+            return {
+                "detected_scenario": None,
+                "provenance": [*state["provenance"], "Scenario detection skipped (no clusters)."],
+                "diagnostics": state.get("diagnostics", {}),
+            }
+        fallback = ScenarioDetection(
+            scenario_name="Unclassified macro event",
+            scenario_type="other",
+            key_actors=[],
+            geographic_scope=[],
+            consequence_chain=[],
+            confidence=0.0,
+        )
+        cluster_summaries = [
+            {"story": c.story_key, "title": c.canonical_title, "summary": c.summary, "region": c.region,
+             "entities": c.entities[:6], "tags": c.tags[:8], "signals": len(c.signal_ids)}
+            for c in sorted(clusters, key=lambda x: len(x.signal_ids), reverse=True)[:5]
+        ]
+        pattern_names = [p.pattern_name for p in patterns[:3]]
+        system_prompt = (
+            "You are a geopolitical and macro analyst. Given a set of news/market signal clusters "
+            "and matched fragility patterns, identify the single dominant macro scenario currently unfolding.\n"
+            "Return a JSON object with:\n"
+            "- scenario_name: concise name (e.g. 'US-Iran Military Escalation')\n"
+            "- scenario_type: one of geopolitical_conflict, trade_war, energy_crisis, monetary_policy, "
+            "social_unrest, financial_contagion, supply_chain_disruption, other\n"
+            "- key_actors: list of countries, companies, or institutions driving the scenario\n"
+            "- geographic_scope: list of affected regions or countries\n"
+            "- consequence_chain: ordered list of causal consequences "
+            "(e.g. ['US strikes Iranian facilities', 'Strait of Hormuz disrupted', 'Global oil supply falls', "
+            "'Middle East producers drop', 'Alternative suppliers gain'])\n"
+            "- confidence: float 0.0–1.0 reflecting how clearly the scenario emerges from the data"
+        )
+        scenario, llm_diag = self.reasoner.refine_model(
+            system_prompt=system_prompt,
+            user_payload={"clusters": cluster_summaries, "patterns": pattern_names},
+            model_class=ScenarioDetection,
+            fallback=fallback,
+        )
+        diagnostics = {**state.get("diagnostics", {}), "scenario_detection_llm": llm_diag, "detected_scenario_name": scenario.scenario_name}
+        provenance = [*state["provenance"], f"Detected scenario: '{scenario.scenario_name}' (confidence {scenario.confidence:.2f})."]
+        return {"detected_scenario": scenario, "diagnostics": diagnostics, "provenance": provenance}
+
     def enrich_dark_signals(self, state: SwarmGraphState) -> SwarmGraphState:
         cluster = state.get("selected_cluster")
         cluster_events = [item for item in state["normalized_events"] if item.cluster_id == cluster.cluster_id] if cluster else []
@@ -208,6 +260,7 @@ class StrategicSwarmWorkflow:
         diagnostics = {**state.get("diagnostics", {}), "signal_alchemist_llm": llm_diag}
         provenance = [*state["provenance"], f"Built {len(bundles)} signal bundle(s) from weak and market signals."]
 
+        scenario = state.get("detected_scenario")
         web_search_signals: list = []
         if self.web_search.enabled:
             all_clusters = state.get("event_clusters") or ([] if not cluster else [cluster])
@@ -218,7 +271,11 @@ class StrategicSwarmWorkflow:
             )[: self.web_search.max_queries_per_run]
             fetched_at = datetime.now(UTC)
             for c in eligible:
-                question = self.web_search.build_query(c.story_key, c.entities, c.region)
+                question = self.web_search.build_query(
+                    c.story_key, c.entities, c.region,
+                    scenario_name=scenario.scenario_name if scenario else None,
+                    consequence_hint=scenario.consequence_chain[:2] if scenario else None,
+                )
                 try:
                     web_search_signals.extend(self.web_search.query(question, story_key=c.story_key, fetched_at=fetched_at))
                 except Exception:  # noqa: BLE001
@@ -229,6 +286,67 @@ class StrategicSwarmWorkflow:
 
         raw_signals = list(state.get("raw_signals") or []) + web_search_signals
         return {"signal_bundles": bundles, "raw_signals": raw_signals, "provenance": provenance, "diagnostics": diagnostics}
+
+    def map_equity_opportunities(self, state: SwarmGraphState) -> SwarmGraphState:
+        scenario = state.get("detected_scenario")
+        if not scenario or not scenario.consequence_chain:
+            return {
+                "equity_opportunities": [],
+                "provenance": [*state["provenance"], "Equity mapping skipped (no scenario detected)."],
+                "diagnostics": state.get("diagnostics", {}),
+            }
+
+        from pydantic import BaseModel as _BaseModel
+
+        class _EquityList(_BaseModel):
+            opportunities: list[EquityOpportunity]
+
+        fallback = _EquityList(opportunities=[])
+        system_prompt = (
+            "You are an equity strategist. Given a detected macro scenario and its causal consequence chain, "
+            "identify specific publicly-traded companies that will be significantly affected.\n"
+            "For each company provide:\n"
+            "- symbol: ticker symbol including exchange suffix if relevant (e.g. REP.MC, XOM, BNO, TTE)\n"
+            "- company_name: full company name\n"
+            "- direction: 'long' (benefits), 'short' (hurt), or 'watch' (uncertain/monitoring)\n"
+            "- rationale: 1–2 sentence causal explanation linking the consequence chain to this company\n"
+            "- scenario_link: the specific consequence chain item that drives this opportunity\n"
+            "- confidence: float 0.0–1.0\n"
+            "Return 3–8 opportunities. Focus on direct, near-term impact. Avoid vague sector calls."
+        )
+        equity_list, llm_diag = self.reasoner.refine_model(
+            system_prompt=system_prompt,
+            user_payload={
+                "scenario_name": scenario.scenario_name,
+                "scenario_type": scenario.scenario_type,
+                "key_actors": scenario.key_actors,
+                "geographic_scope": scenario.geographic_scope,
+                "consequence_chain": scenario.consequence_chain,
+            },
+            model_class=_EquityList,
+            fallback=fallback,
+        )
+
+        opportunities = equity_list.opportunities
+        # Best-effort web search confirmation per symbol
+        if self.web_search.enabled and opportunities:
+            fetched_at = datetime.now(UTC)
+            for opp in opportunities[:3]:  # cap at 3 to avoid excess API calls
+                query = f"{opp.company_name} ({opp.symbol}) stock {scenario.scenario_name} impact latest news"
+                try:
+                    signals = self.web_search.query(query, story_key=f"equity_{opp.symbol.lower()}", fetched_at=fetched_at)
+                    if signals:
+                        opp.search_summary = signals[0].summary[:400] if signals[0].summary else None
+                except Exception:  # noqa: BLE001
+                    pass
+
+        diagnostics = {
+            **state.get("diagnostics", {}),
+            "equity_opportunity_count": len(opportunities),
+            "equity_map_llm": llm_diag,
+        }
+        provenance = [*state["provenance"], f"Mapped {len(opportunities)} equity opportunity/ies from scenario '{scenario.scenario_name}'."]
+        return {"equity_opportunities": opportunities, "diagnostics": diagnostics, "provenance": provenance}
 
     def compute_fragility(self, state: SwarmGraphState) -> SwarmGraphState:
         cluster = state.get("selected_cluster")
@@ -309,6 +427,8 @@ class StrategicSwarmWorkflow:
             ripple_scenarios=state["ripple_scenarios"],
             reviewed=state["reviewed_opportunities"],
             provenance=state["provenance"],
+            detected_scenario=state.get("detected_scenario"),
+            equity_opportunities=state.get("equity_opportunities", []),
         )
         diagnostics = {**state.get("diagnostics", {}), **published.diagnostics, "publish_decision": published.publication_status}
         return {"final_report": published.report, "diagnostics": diagnostics}

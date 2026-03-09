@@ -5,6 +5,7 @@ from typing import Any, TypedDict
 from strategic_swarm_agent.models.contracts import (
     AbstractPattern,
     EventCluster,
+    EquityOpportunity,
     FinalReport,
     FragilityAssessment,
     OpportunityIdea,
@@ -12,6 +13,7 @@ from strategic_swarm_agent.models.contracts import (
     RawSignal,
     ReviewedOpportunity,
     RippleScenario,
+    ScenarioDetection,
     SignalBundle,
     SignalEvent,
 )
@@ -38,3 +40,5 @@ class SwarmGraphState(TypedDict, total=False):
     provider_health: list[ProviderHealthStatus]
     opportunity_retry_count: int
     max_opportunity_retries: int
+    detected_scenario: ScenarioDetection | None
+    equity_opportunities: list[EquityOpportunity]

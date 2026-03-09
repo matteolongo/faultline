@@ -34,6 +34,8 @@ class ReportBuilder:
         ripple_scenarios: list[RippleScenario],
         reviewed: list[ReviewedOpportunity],
         provenance: list[str],
+        detected_scenario=None,
+        equity_opportunities=None,
     ) -> PublishedReport:
         pattern = patterns[0]
         assessment = fragility[0]
@@ -103,6 +105,8 @@ class ReportBuilder:
             invalidation_signals=invalidation_signals,
             provenance=provenance_lines,
             monitor_only_reason="; ".join(contradictions) if contradictions else None,
+            detected_scenario=detected_scenario,
+            equity_opportunities=equity_opportunities or [],
         )
         final_report, llm_diag = self.reasoner.refine_model(
             system_prompt=self.prompts["execution_critic"],
@@ -122,6 +126,9 @@ class ReportBuilder:
             final_report.monitor_only_reason = "; ".join(contradictions)
             final_report.opportunity_map = []
             final_report.execution_recommendations = execution_recommendations
+        # Preserve scenario + equity fields (LLM refine_model doesn't know about them)
+        final_report.detected_scenario = detected_scenario
+        final_report.equity_opportunities = equity_opportunities or []
         return PublishedReport(
             report_id=report_id,
             run_id=run_id,
@@ -143,6 +150,36 @@ def render_markdown(report: FinalReport) -> str:
         "## Publication Status",
         report.publication_status,
         "",
+    ]
+
+    # Scenario Detection section
+    if report.detected_scenario:
+        sc = report.detected_scenario
+        lines += [
+            "## Detected Scenario",
+            f"**{sc.scenario_name}** · type: `{sc.scenario_type}` · confidence: {sc.confidence:.0%}",
+            "",
+        ]
+        if sc.key_actors:
+            lines += [f"**Key actors:** {', '.join(sc.key_actors)}", ""]
+        if sc.geographic_scope:
+            lines += [f"**Geographic scope:** {', '.join(sc.geographic_scope)}", ""]
+        if sc.consequence_chain:
+            lines += ["### Causal Chain"]
+            lines += [f"{i+1}. {step}" for i, step in enumerate(sc.consequence_chain)]
+            lines += [""]
+
+    # Equity Opportunities section
+    if report.equity_opportunities:
+        lines += ["## Equity Signals", ""]
+        lines += ["| Symbol | Company | Direction | Confidence | Rationale |"]
+        lines += ["|--------|---------|-----------|------------|-----------|"]
+        for opp in report.equity_opportunities:
+            arrow = {"long": "⬆ LONG", "short": "⬇ SHORT", "watch": "👁 WATCH"}.get(opp.direction, opp.direction.upper())
+            lines += [f"| {opp.symbol} | {opp.company_name} | {arrow} | {opp.confidence:.0%} | {opp.rationale} |"]
+        lines += [""]
+
+    lines += [
         "## System Topology",
         report.system_topology,
         "",

@@ -528,13 +528,29 @@ class WebSearchEnricher(HTTPProvider):
         # Required by ABC but unused — this enricher is called via query(), not fetch_window()
         return []
 
-    def build_query(self, story_key: str, entities: list[str], region: str) -> str:
-        """Derive a targeted fragility question from a cluster's metadata."""
+    def build_query(
+        self,
+        story_key: str,
+        entities: list[str],
+        region: str,
+        scenario_name: str | None = None,
+        consequence_hint: list[str] | None = None,
+    ) -> str:
+        """Derive a targeted fragility question from cluster metadata, optionally framed by a detected scenario."""
         topic = story_key.replace("_", " ")
         named = [e for e in entities if e and len(e) > 2][:4]
         actor_clause = f" Key actors or entities involved: {', '.join(named)}." if named else ""
+        if scenario_name and consequence_hint:
+            context = (
+                f"In the context of the scenario '{scenario_name}', particularly regarding "
+                f"{consequence_hint[0]}"
+                + (f" and {consequence_hint[1]}" if len(consequence_hint) > 1 else "")
+                + ", "
+            )
+        else:
+            context = ""
         return (
-            f"What are the latest confirmed developments regarding {topic} in {region}?"
+            f"{context}What are the latest confirmed developments regarding {topic} in {region}?"
             f"{actor_clause}"
             " Focus on: which systems or infrastructure are most affected,"
             " which actors bear the greatest structural cost,"
