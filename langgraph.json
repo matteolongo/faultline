@@ -1,0 +1,8 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "strategic_swarm": "strategic_swarm_agent.graph.studio:graph"
+  },
+  "env": ".env",
+  "python_version": "3.11"
+}
