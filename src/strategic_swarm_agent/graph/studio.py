@@ -34,6 +34,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[4] / ".env", override=False)
 
 from strategic_swarm_agent.graph.workflow import StrategicSwarmWorkflow  # noqa: E402
+from strategic_swarm_agent.models import SwarmInputSchema  # noqa: E402
 from strategic_swarm_agent.persistence.store import SignalStore  # noqa: E402
 
 _output_dir = Path(os.getenv("SWARM_OUTPUT_DIR", "outputs"))
@@ -42,5 +43,7 @@ _output_dir.mkdir(parents=True, exist_ok=True)
 _store = SignalStore(str(_output_dir / "runs.sqlite"))
 _workflow = StrategicSwarmWorkflow(store=_store)
 
-# `graph` is the symbol LangGraph Studio expects
-graph = _workflow.build()
+# `graph` is the symbol LangGraph Studio expects.
+# _input_schema=SwarmInputSchema restricts the Studio Input panel to the 4 user-facing fields
+# (scenario_id, run_mode, window_start, window_end) without affecting programmatic invocations.
+graph = _workflow.build(_input_schema=SwarmInputSchema)

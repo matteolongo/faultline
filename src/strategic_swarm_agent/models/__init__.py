@@ -19,7 +19,7 @@ from strategic_swarm_agent.models.contracts import (
     SignalBundle,
     SignalEvent,
 )
-from strategic_swarm_agent.models.state import SwarmGraphState
+from strategic_swarm_agent.models.state import SwarmGraphState, SwarmInputSchema
 
 __all__ = [
     "AbstractPattern",
@@ -42,4 +42,5 @@ __all__ = [
     "SignalBundle",
     "SignalEvent",
     "SwarmGraphState",
+    "SwarmInputSchema",
 ]

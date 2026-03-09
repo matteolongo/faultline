@@ -161,6 +161,17 @@ Then open: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 
 The graph appears as `strategic_swarm`. You will need a free [LangSmith](https://smith.langchain.com) account for the Studio UI; the local API at `http://127.0.0.1:2024` works without one.
 
+**Studio input**: the Input panel shows only the four user-facing fields:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `scenario_id` | `arctic_cable_bypass` | Demo scenario to load (`arctic_cable_bypass`, `debt_defense_spiral`, `open_model_breakout`) |
+| `run_mode` | `demo` | `demo` / `live` / `latest` / `replay` |
+| `window_start` | — | ISO-8601 timestamp (live/latest modes only) |
+| `window_end` | — | ISO-8601 timestamp (live/latest modes only) |
+
+**Step-through execution**: click the **Interrupts** button (🐛 icon, top-right) to add breakpoints before any node. Studio will pause there and let you inspect intermediate state before continuing.
+
 For live mode you will need `NEWSAPI_API_KEY`, `ALPHAVANTAGE_API_KEY`, and `FRED_API_KEY`. If keys are missing, live/provider-health flows stay non-crashing and the demo/replay paths remain fully usable.
 
 Adding `OPENAI_API_KEY` is optional but recommended for two reasons: it enables the LLM refinement nodes (PatternMatcher, SignalAlchemist, etc.) **and** automatically triggers cluster-driven web search enrichment — after clustering, the system derives targeted fragility questions from each significant cluster and fetches live synthesis via OpenAI's `web_search_preview` tool before fragility scoring.

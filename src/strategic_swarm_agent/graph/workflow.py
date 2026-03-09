@@ -32,7 +32,7 @@ except Exception:  # pragma: no cover - fallback for incompatible local langgrap
                     current = self.edges[current]
 
     class StateGraph:  # type: ignore[override]
-        def __init__(self, _state_schema) -> None:
+        def __init__(self, _state_schema, **kwargs) -> None:
             self.nodes: dict[str, object] = {}
             self.edges: dict[str, str] = {}
             self.conditional_edges: dict[str, tuple[object, dict[str, str]]] = {}
@@ -55,7 +55,7 @@ from strategic_swarm_agent.agents.pattern_matcher import PatternMatcher
 from strategic_swarm_agent.agents.ripple_architect import RippleArchitect
 from strategic_swarm_agent.agents.signal_alchemist import SignalAlchemist
 from strategic_swarm_agent.llm.backend import StructuredReasoner
-from strategic_swarm_agent.models import SwarmGraphState
+from strategic_swarm_agent.models import SwarmGraphState, SwarmInputSchema
 from strategic_swarm_agent.models.contracts import EquityOpportunity, ScenarioDetection
 from strategic_swarm_agent.persistence.store import SignalStore, make_dead_letter
 from strategic_swarm_agent.providers.normalizer import SignalNormalizer
@@ -96,8 +96,8 @@ class StrategicSwarmWorkflow:
         self.execution_critic = ExecutionCritic()
         self.report_builder = ReportBuilder(self.reasoner)
 
-    def build(self):
-        graph = StateGraph(SwarmGraphState)
+    def build(self, *, _input_schema=None):
+        graph = StateGraph(SwarmGraphState, input_schema=_input_schema) if _input_schema else StateGraph(SwarmGraphState)
         graph.add_node("ingest_signals", self.ingest_signals)
         graph.add_node("normalize_events", self.normalize_events)
         graph.add_node("pattern_match", self.pattern_match)

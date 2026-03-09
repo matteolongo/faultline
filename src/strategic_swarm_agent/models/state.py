@@ -21,6 +21,19 @@ from strategic_swarm_agent.models.contracts import (
 )
 
 
+class SwarmInputSchema(TypedDict, total=False):
+    """User-facing input fields shown in LangGraph Studio's Input panel.
+
+    Only these four fields are needed to kick off a run. All other state keys
+    are populated by graph nodes and are not user-settable.
+    """
+
+    scenario_id: str
+    run_mode: str
+    window_start: str
+    window_end: str
+
+
 class SwarmGraphState(TypedDict, total=False):
     scenario_id: str
     run_mode: str
