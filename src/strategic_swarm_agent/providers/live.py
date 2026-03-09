@@ -488,3 +488,184 @@ class GDELTProvider(HTTPProvider):
                 )
             )
         return records
+
+
+class WebSearchEnricher(HTTPProvider):
+    """Cluster-driven enricher that uses OpenAI web_search_preview for live synthesis.
+
+    Unlike the other providers this class is NOT registered in build_live_providers()
+    and does NOT implement fetch_window(). It is called from enrich_dark_signals()
+    after clustering, with one targeted question derived per EventCluster.
+
+    Reuses OPENAI_API_KEY — no additional account or credits needed beyond the LLM
+    refinement nodes that already use the same key.
+    """
+
+    provider_name = "openai-websearch"
+    source_family = "synthesis"
+    base_url = "https://api.openai.com/v1/responses"
+
+    def __init__(self, *, transport: httpx.BaseTransport | None = None) -> None:
+        config = load_provider_config()
+        defaults = config["defaults"]
+        provider_cfg = config["providers"]["web_search"]
+        super().__init__(
+            timeout_seconds=defaults["timeout_seconds"],
+            retries=defaults["retries"],
+            backoff_seconds=defaults["backoff_seconds"],
+            transport=transport,
+        )
+        self.model = provider_cfg["model"]
+        self.max_tokens = provider_cfg["max_tokens"]
+        self.min_cluster_signals = provider_cfg["min_cluster_signals"]
+        self.max_queries_per_run = provider_cfg["max_queries_per_run"]
+
+    @property
+    def enabled(self) -> bool:
+        return bool(os.getenv("OPENAI_API_KEY"))
+
+    def fetch_window(self, start_at: datetime, end_at: datetime) -> list[RawSignal]:  # pragma: no cover
+        # Required by ABC but unused — this enricher is called via query(), not fetch_window()
+        return []
+
+    def build_query(self, story_key: str, entities: list[str], region: str) -> str:
+        """Derive a targeted fragility question from a cluster's metadata."""
+        topic = story_key.replace("_", " ")
+        named = [e for e in entities if e and len(e) > 2][:4]
+        actor_clause = f" Key actors or entities involved: {', '.join(named)}." if named else ""
+        return (
+            f"What are the latest confirmed developments regarding {topic} in {region}?"
+            f"{actor_clause}"
+            " Focus on: which systems or infrastructure are most affected,"
+            " which actors bear the greatest structural cost,"
+            " and what second-order fragilities or indirect effects are emerging."
+            " Cite specific recent events where possible."
+        )
+
+    def query(self, question: str, *, story_key: str, fetched_at: datetime) -> list[RawSignal]:
+        """Send one question via OpenAI web_search_preview and return signals per citation."""
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return []
+        payload = self._request(
+            "POST",
+            self.base_url,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json_body={
+                "model": self.model,
+                "max_output_tokens": self.max_tokens,
+                "tools": [{"type": "web_search_preview"}],
+                "input": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a geopolitical and structural fragility analyst. "
+                            "Provide factual, citation-backed answers focused on systemic risks, "
+                            "asymmetric pressure points, and second-order effects."
+                        ),
+                    },
+                    {"role": "user", "content": question},
+                ],
+            },
+        )
+        return self.parse_search_response(payload, story_key=story_key, fetched_at=fetched_at)
+
+    def parse_search_response(
+        self,
+        payload: dict,
+        *,
+        story_key: str,
+        fetched_at: datetime,
+    ) -> list[RawSignal]:
+        """Parse an OpenAI Responses API web_search_preview response.
+
+        The response output list contains items of type "web_search_call" (the search
+        step) and "message" (the answer). The message content block of type "output_text"
+        carries the synthesized answer in .text and citation URLs in .annotations
+        (each annotation has type "url_citation" with .url and .title fields).
+        """
+        answer = ""
+        citations: list[dict] = []  # [{url, title}]
+
+        for item in payload.get("output") or []:
+            if item.get("type") != "message":
+                continue
+            for block in item.get("content") or []:
+                if block.get("type") != "output_text":
+                    continue
+                answer = block.get("text") or ""
+                for ann in block.get("annotations") or []:
+                    if ann.get("type") == "url_citation" and ann.get("url"):
+                        citations.append({"url": ann["url"], "title": ann.get("title") or ""})
+
+        if not answer:
+            return []
+
+        if not citations:
+            # No citations: emit a single signal for the synthesis text itself
+            content_hash = _hash_text(_compact_text(story_key, answer))
+            return [
+                RawSignal(
+                    id=content_hash[:16],
+                    provider_name=self.provider_name,
+                    provider_item_id=content_hash[:16],
+                    source=self.source_family,
+                    timestamp=fetched_at,
+                    fetched_at=fetched_at,
+                    published_at=fetched_at,
+                    signal_type="news-synthesis",
+                    title=f"Web synthesis: {story_key.replace('_', ' ')}",
+                    summary=answer,
+                    source_url=None,
+                    request_url=self.base_url,
+                    query_key=story_key,
+                    language="en",
+                    entities=[],
+                    region="Global",
+                    tags=_coerce_tags([story_key, "openai-websearch", "synthesis"]),
+                    confidence=0.82,
+                    provider_confidence=0.82,
+                    content_hash=content_hash,
+                    dedupe_hash=_hash_text(f"openai-websearch::{story_key}::{fetched_at.date().isoformat()}"),
+                    raw_payload_reference=f"{self.provider_name}:{content_hash[:16]}",
+                    payload=payload,
+                )
+            ]
+
+        records: list[RawSignal] = []
+        for citation in citations:
+            url = citation["url"]
+            title = citation["title"] or f"Web synthesis: {story_key.replace('_', ' ')}"
+            content_hash = _hash_text(_compact_text(story_key, url, answer[:200]))
+            dedupe_hash = _hash_text(f"openai-websearch::{_domain(url) or url}::{story_key}")
+            records.append(
+                RawSignal(
+                    id=content_hash[:16],
+                    provider_name=self.provider_name,
+                    provider_item_id=url,
+                    source=self.source_family,
+                    timestamp=fetched_at,
+                    fetched_at=fetched_at,
+                    published_at=fetched_at,
+                    signal_type="news-synthesis",
+                    title=title,
+                    summary=answer,
+                    source_url=url,
+                    request_url=self.base_url,
+                    query_key=story_key,
+                    language="en",
+                    entities=[_domain(url)] if _domain(url) else [],
+                    region="Global",
+                    tags=_coerce_tags([story_key, "openai-websearch", "synthesis", _domain(url) or ""]),
+                    confidence=0.82,
+                    provider_confidence=0.82,
+                    content_hash=content_hash,
+                    dedupe_hash=dedupe_hash,
+                    raw_payload_reference=f"{self.provider_name}:{url}",
+                    payload={"answer": answer, "citation_url": url, "citation_title": title, "all_citations": citations},
+                )
+            )
+        return records

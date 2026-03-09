@@ -10,6 +10,7 @@ source_weights:
   market: 1.0
   macro: 0.95
   alt: 0.78
+  synthesis: 0.85
 providers:
   newsapi:
     enabled: true
@@ -51,3 +52,12 @@ providers:
     mode: ArtList
     format: json
     maxrecords: 50
+  # Uses OPENAI_API_KEY — no separate account needed
+  web_search:
+    enabled: true
+    source_family: synthesis
+    base_url: https://api.openai.com/v1/responses
+    model: gpt-4o-mini
+    max_tokens: 1024
+    min_cluster_signals: 3
+    max_queries_per_run: 5

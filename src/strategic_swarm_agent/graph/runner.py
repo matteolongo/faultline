@@ -12,6 +12,7 @@ from strategic_swarm_agent.persistence.store import SignalStore
 from strategic_swarm_agent.providers.registry import build_live_providers
 from strategic_swarm_agent.providers.sample import SampleScenarioRepository
 from strategic_swarm_agent.synthesis.report_builder import render_markdown
+from strategic_swarm_agent.utils.env import bootstrap_env
 from strategic_swarm_agent.utils.io import ensure_directory, serialize_model, write_json, write_text
 
 
@@ -22,6 +23,7 @@ class StrategicSwarmRunner:
         db_path: str | Path | None = None,
         database_url: str | None = None,
     ) -> None:
+        bootstrap_env()
         self.output_dir = ensure_directory(Path(output_dir or os.getenv("SWARM_OUTPUT_DIR", "outputs")))
         self.database_url = database_url or os.getenv(
             "SWARM_DATABASE_URL",

@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from strategic_swarm_agent.graph.runner import StrategicSwarmRunner, default_goldset
 from strategic_swarm_agent.providers.sample import SampleScenarioRepository
+from strategic_swarm_agent.utils.env import bootstrap_env
 from strategic_swarm_agent.utils.logging import configure_logging
 
 
@@ -68,6 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    bootstrap_env()
     configure_logging()
     parser = build_parser()
     args = parser.parse_args()

@@ -11,6 +11,7 @@ from strategic_swarm_agent.presentation.operator_surface import (
     parse_operator_datetime,
     run_and_summarize,
 )
+from strategic_swarm_agent.utils.env import bootstrap_env
 
 
 def main() -> None:
@@ -19,6 +20,7 @@ def main() -> None:
     except ImportError as exc:  # pragma: no cover - dependency-gated runtime
         raise SystemExit("Install operator extras first: pip install -e '.[operator]'") from exc
 
+    bootstrap_env()
     st.set_page_config(page_title="Strategic Swarm Operator", layout="wide")
     st.title("Strategic Swarm Operator")
     st.caption("Manual research runs over the existing StrategicSwarmRunner.")

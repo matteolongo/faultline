@@ -1,0 +1,45 @@
+{
+  "id": "resp_abc123",
+  "object": "response",
+  "model": "gpt-4o-mini",
+  "output": [
+    {
+      "type": "web_search_call",
+      "id": "ws_abc123",
+      "status": "completed"
+    },
+    {
+      "type": "message",
+      "id": "msg_abc123",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Recent confirmed developments indicate increased Houthi activity targeting undersea cable routes in the Red Sea, with the AAE-1 and Seacom cables sustaining damage as of early 2024. Internet traffic across the region has been rerouted through Mediterranean and Indian Ocean alternatives, adding 40-80ms of latency for traffic between Europe and Asia.",
+          "annotations": [
+            {
+              "type": "url_citation",
+              "url": "https://www.reuters.com/technology/red-sea-cable-damage-rerouting-2024",
+              "title": "Red Sea cable damage forces major rerouting"
+            },
+            {
+              "type": "url_citation",
+              "url": "https://www.ft.com/content/undersea-cable-houthi-disruption",
+              "title": "Houthi attacks disrupt undersea cables"
+            },
+            {
+              "type": "url_citation",
+              "url": "https://submarine-cable-map.com/incidents/red-sea-2024",
+              "title": "Red Sea 2024 cable incidents"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 120,
+    "output_tokens": 98,
+    "total_tokens": 218
+  }
+}

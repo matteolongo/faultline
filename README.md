@@ -69,6 +69,25 @@ python3 -m strategic_swarm_agent evaluate --scenario open_model_breakout
 pytest
 ```
 
+## Obtaining API keys
+
+The live ingestion providers each require a free or freemium API key. All four can be obtained without a paid plan to get started.
+
+| Key | Service | Sign-up URL | Notes |
+|-----|---------|-------------|-------|
+| `NEWSAPI_API_KEY` | NewsAPI | <https://newsapi.org/register> | Free developer tier; 100 requests/day, no credit card required. |
+| `ALPHAVANTAGE_API_KEY` | Alpha Vantage | <https://www.alphavantage.co/support/#api-key> | Free tier; 25 requests/day. Premium tiers available for higher volume. |
+| `FRED_API_KEY` | FRED (Federal Reserve Economic Data) | <https://fredaccount.stlouisfed.org/apikeys> | Free, no rate-limit concerns for typical research workloads. Requires creating a St. Louis Fed account. |
+| `OPENAI_API_KEY` | OpenAI | <https://platform.openai.com/api-keys> | **Optional.** Enables LLM-backed refinement nodes **and** cluster-driven web search enrichment (via `web_search_preview`). Requires a paid account with credits. |
+
+Steps:
+1. Register at each URL above and copy the key shown after creation.
+2. Copy `.env.example` to `.env` in the repository root: `cp .env.example .env`
+3. Paste each key into the corresponding variable in `.env`.
+4. Verify connectivity with: `python3 -m strategic_swarm_agent provider-health`
+
+> **Tip:** `NEWSAPI_API_KEY`, `ALPHAVANTAGE_API_KEY`, and `FRED_API_KEY` are required for live/latest-window flows. Without them, demo and replay paths remain fully functional.
+
 ## Environment
 
 Core environment variables:
@@ -84,6 +103,8 @@ Core environment variables:
 - `OPENAI_API_KEY`: optional. Enables structured refinement for the LLM-backed nodes.
 
 See [.env.example](/Users/matteo.longo/projects/streategic_swarm_agent/.env.example).
+
+The CLI, notebook, and Streamlit app auto-load `.env` and `.env.local` from the repository root. The shortest path to live mode is to copy `.env.example` to `.env` and fill in your keys there.
 
 ## CLI usage
 
@@ -126,6 +147,32 @@ streamlit run src/strategic_swarm_agent/operator_app.py
 The notebook is the recommended operator surface. The Streamlit app is a small convenience wrapper over the same execution path.
 
 For live mode you will need `NEWSAPI_API_KEY`, `ALPHAVANTAGE_API_KEY`, and `FRED_API_KEY`. If keys are missing, live/provider-health flows stay non-crashing and the demo/replay paths remain fully usable.
+
+Adding `OPENAI_API_KEY` is optional but recommended for two reasons: it enables the LLM refinement nodes (PatternMatcher, SignalAlchemist, etc.) **and** automatically triggers cluster-driven web search enrichment — after clustering, the system derives targeted fragility questions from each significant cluster and fetches live synthesis via OpenAI's `web_search_preview` tool before fragility scoring.
+
+Minimal live setup:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` and set:
+
+```bash
+NEWSAPI_API_KEY=your_key
+ALPHAVANTAGE_API_KEY=your_key
+FRED_API_KEY=your_key
+OPENAI_API_KEY=your_key_optional
+```
+
+Then verify the providers and run a live pull:
+
+```bash
+python3 -m strategic_swarm_agent provider-health
+python3 -m strategic_swarm_agent run-latest --lookback-minutes 60
+```
+
+In the notebook, switch `MODE` from `demo` to `latest` or `live` after the keys are in place.
 
 ## Live source configuration
 

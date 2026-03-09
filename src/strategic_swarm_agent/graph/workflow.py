@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 from uuid import uuid4
-from datetime import datetime
+from datetime import UTC, datetime
 
 try:
     from langgraph.graph import END, START, StateGraph
@@ -57,6 +57,7 @@ from strategic_swarm_agent.models import SwarmGraphState
 from strategic_swarm_agent.persistence.store import SignalStore, make_dead_letter
 from strategic_swarm_agent.providers.normalizer import SignalNormalizer
 from strategic_swarm_agent.providers.base import ProviderError, SignalProvider
+from strategic_swarm_agent.providers.live import WebSearchEnricher
 from strategic_swarm_agent.providers.registry import build_live_providers
 from strategic_swarm_agent.providers.sample import DarkSignalProvider, MarketContextProvider, NewsSignalProvider
 from strategic_swarm_agent.scoring.fragility import FragilityScorer
@@ -77,6 +78,7 @@ class StrategicSwarmWorkflow:
         self.market = MarketContextProvider()
         self.dark = DarkSignalProvider()
         self.live_providers = live_providers or build_live_providers()
+        self.web_search = WebSearchEnricher()
         self.normalizer = SignalNormalizer()
         self.pattern_matcher = PatternMatcher(self.reasoner)
         self.signal_alchemist = SignalAlchemist(self.reasoner)
@@ -205,7 +207,28 @@ class StrategicSwarmWorkflow:
         bundles, llm_diag = self.signal_alchemist.enrich(cluster_events, cluster) if cluster else ([], {"llm_used": False, "llm_status": "empty"})
         diagnostics = {**state.get("diagnostics", {}), "signal_alchemist_llm": llm_diag}
         provenance = [*state["provenance"], f"Built {len(bundles)} signal bundle(s) from weak and market signals."]
-        return {"signal_bundles": bundles, "provenance": provenance, "diagnostics": diagnostics}
+
+        web_search_signals: list = []
+        if self.web_search.enabled:
+            all_clusters = state.get("event_clusters") or ([] if not cluster else [cluster])
+            eligible = sorted(
+                [c for c in all_clusters if len(c.signal_ids) >= self.web_search.min_cluster_signals],
+                key=lambda c: len(c.signal_ids),
+                reverse=True,
+            )[: self.web_search.max_queries_per_run]
+            fetched_at = datetime.now(UTC)
+            for c in eligible:
+                question = self.web_search.build_query(c.story_key, c.entities, c.region)
+                try:
+                    web_search_signals.extend(self.web_search.query(question, story_key=c.story_key, fetched_at=fetched_at))
+                except Exception:  # noqa: BLE001
+                    pass  # non-fatal; enrichment is best-effort
+            if web_search_signals:
+                provenance = [*provenance, f"Web search enriched {len(eligible)} cluster(s) → {len(web_search_signals)} synthesis signal(s)."]
+                diagnostics = {**diagnostics, "web_search_signal_count": len(web_search_signals)}
+
+        raw_signals = list(state.get("raw_signals") or []) + web_search_signals
+        return {"signal_bundles": bundles, "raw_signals": raw_signals, "provenance": provenance, "diagnostics": diagnostics}
 
     def compute_fragility(self, state: SwarmGraphState) -> SwarmGraphState:
         cluster = state.get("selected_cluster")

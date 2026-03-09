@@ -39,12 +39,12 @@ class HTTPProvider(SignalProvider):
         self.backoff_seconds = backoff_seconds
         self._transport = transport
 
-    def _request(self, method: str, url: str, *, params: dict[str, Any] | None = None, headers: dict[str, str] | None = None) -> dict[str, Any]:
+    def _request(self, method: str, url: str, *, params: dict[str, Any] | None = None, headers: dict[str, str] | None = None, json_body: dict[str, Any] | None = None) -> dict[str, Any]:
         last_error: Exception | None = None
         for attempt in range(1, self.retries + 1):
             try:
                 with httpx.Client(timeout=self.timeout_seconds, transport=self._transport) as client:
-                    response = client.request(method, url, params=params, headers=headers)
+                    response = client.request(method, url, params=params, headers=headers, json=json_body)
                 response.raise_for_status()
                 return response.json()
             except Exception as exc:  # pragma: no cover - exercised through provider tests
