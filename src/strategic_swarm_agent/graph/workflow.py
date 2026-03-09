@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 from uuid import uuid4
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel
 
@@ -139,13 +139,14 @@ class StrategicSwarmWorkflow:
             return {"provenance": provenance, "opportunity_retry_count": 0, "max_opportunity_retries": 1}
 
         if state.get("run_mode") == "demo":
-            scenario_id = state["scenario_id"]
+            scenario_id = state.get("scenario_id") or "arctic_cable_bypass"
             raw = self.news.fetch(scenario_id) + self.market.fetch(scenario_id) + self.dark.fetch(scenario_id)
             provenance = [f"Ingested {len(raw)} raw signals from sample providers for {scenario_id}."]
             return {"raw_signals": raw, "provenance": provenance, "opportunity_retry_count": 0, "max_opportunity_retries": 1}
 
-        start_at = datetime.fromisoformat(state["window_start"])
-        end_at = datetime.fromisoformat(state["window_end"])
+        now = datetime.now(UTC)
+        start_at = datetime.fromisoformat(state["window_start"]) if state.get("window_start") else now - timedelta(minutes=60)
+        end_at = datetime.fromisoformat(state["window_end"]) if state.get("window_end") else now
         raw = []
         provider_counts: dict[str, int] = {}
         for provider in self.live_providers:
