@@ -21,18 +21,34 @@ def summarize_final_state(final_state: dict[str, Any]) -> dict[str, Any]:
     diagnostics = final_state.get("diagnostics") or {}
     return {
         "publication_status": report.get("publication_status"),
+        "headline": report.get("headline"),
         "executive_summary": report.get("executive_summary"),
         "monitor_only_reason": report.get("monitor_only_reason"),
         "system_topology": report.get("system_topology"),
-        "opportunity_count": len(report.get("opportunity_map") or []),
+        "stage": report.get("stage"),
+        "opportunity_count": len(report.get("market_implications") or report.get("opportunity_map") or []),
         "cluster_id": cluster.get("cluster_id"),
         "cluster_title": cluster.get("canonical_title"),
         "cluster_strength": cluster.get("cluster_strength"),
         "agreement_score": cluster.get("agreement_score"),
-        "fragility_score": diagnostics.get("fragility_score"),
+        "stage_diagnostic": diagnostics.get("stage"),
         "publish_decision": diagnostics.get("publish_decision"),
         "source_counts": diagnostics.get("source_counts", {}),
     }
+
+
+def load_outcome_markdown(run_dir: str | Path) -> str | None:
+    path = Path(run_dir) / "outcomes.md"
+    if not path.exists():
+        return None
+    return path.read_text()
+
+
+def load_outcome_json(run_dir: str | Path) -> dict[str, Any] | None:
+    path = Path(run_dir) / "outcomes.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
 
 
 def load_report_markdown(run_dir: str | Path) -> str | None:
@@ -110,9 +126,17 @@ def run_and_summarize(
     summary = summarize_final_state(serialize_model(result["final_state"]))
     summary["run_id"] = result["run_id"]
     summary["run_dir"] = result["run_dir"]
+    outcome_json = load_outcome_json(result["run_dir"])
+    if outcome_json:
+        outcome_summary = outcome_json.get("summary", {})
+        summary["confirmed_outcomes"] = outcome_summary.get("confirmed", 0)
+        summary["partial_outcomes"] = outcome_summary.get("partial", 0)
+        summary["unconfirmed_outcomes"] = outcome_summary.get("unconfirmed", 0)
     return {
         "result": result,
         "summary": summary,
         "report_markdown": load_report_markdown(result["run_dir"]),
         "report_json": load_report_json(result["run_dir"]),
+        "outcome_markdown": load_outcome_markdown(result["run_dir"]),
+        "outcome_json": outcome_json,
     }

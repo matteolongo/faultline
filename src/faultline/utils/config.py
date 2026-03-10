@@ -50,5 +50,15 @@ def load_prompts() -> dict[str, str]:
 
 
 @lru_cache(maxsize=1)
+def load_mechanisms() -> dict[str, Any]:
+    return load_yaml_config("mechanisms.yaml")
+
+
+@lru_cache(maxsize=1)
+def load_stages() -> dict[str, Any]:
+    return load_yaml_config("stages.yaml")
+
+
+@lru_cache(maxsize=1)
 def load_provider_config() -> dict[str, Any]:
     return load_yaml_config("providers.yaml")

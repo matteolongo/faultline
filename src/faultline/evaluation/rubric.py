@@ -4,25 +4,20 @@ from faultline.models import FinalReport
 
 
 def evaluate_report(report: FinalReport) -> dict[str, float]:
-    topology_quality = 1.0 if "Empire:" in report.system_topology and "Disruptor:" in report.system_topology else 0.4
-    second_order_insight = min(1.0, len(report.ripple_map) / 8)
-    opportunity_originality = (
-        1.0
-        if any(
-            "indirect" in item.lower() or "picks-and-shovels" in item.lower()
-            for item in report.execution_recommendations
-        )
-        else 0.55
-    )
-    explainability = min(1.0, (len(report.provenance) + len(report.fragility_map)) / 10)
+    situation_quality = 1.0 if report.situation and report.stage else 0.45
+    mechanism_quality = min(1.0, len(report.mechanism_map) / 3)
+    prediction_quality = min(1.0, len(report.scenario_map) / 4)
+    action_quality = 1.0 if report.actions_now and report.exit_signals else 0.5
+    explainability = min(1.0, (len(report.evidence) + len(report.references) + len(report.provenance)) / 10)
     overall = round(
-        (topology_quality + second_order_insight + opportunity_originality + explainability) / 4,
+        (situation_quality + mechanism_quality + prediction_quality + action_quality + explainability) / 5,
         3,
     )
     return {
-        "topology_quality": round(topology_quality, 3),
-        "second_order_insight": round(second_order_insight, 3),
-        "opportunity_originality": round(opportunity_originality, 3),
+        "situation_quality": round(situation_quality, 3),
+        "mechanism_quality": round(mechanism_quality, 3),
+        "prediction_quality": round(prediction_quality, 3),
+        "action_quality": round(action_quality, 3),
         "explainability": round(explainability, 3),
         "overall": overall,
     }

@@ -1,19 +1,19 @@
-from faultline.utils.config import load_archetypes
+from faultline.utils.config import load_mechanisms, load_stages
 
 
-def test_archetype_library_contains_required_topologies() -> None:
-    payload = load_archetypes()
-    names = {item.name for item in payload["topologies"]}
+def test_mechanism_library_contains_core_mechanisms() -> None:
+    payload = load_mechanisms()
+    names = {item["name"] for item in payload["mechanisms"]}
     assert {
-        "Empire vs Swarm",
-        "Chokepoint vs Bypass",
-        "Monolith vs Protocol",
-        "Heavy Capital vs Light Network",
+        "Indirect Strategy",
+        "Platform Bypass",
+        "Coalition Drift",
+        "Timing Mismatch",
     }.issubset(names)
 
 
-def test_historical_analog_lookup_is_available() -> None:
-    payload = load_archetypes()
-    analogs = payload["historical_analogs"]
-    assert "linux_vs_proprietary_stacks" in analogs
-    assert analogs["linux_vs_proprietary_stacks"].name == "Linux vs proprietary stacks"
+def test_stage_ladder_contains_repricing() -> None:
+    payload = load_stages()
+    stage_ids = {item["id"] for item in payload["stages"]}
+    assert "repricing" in stage_ids
+    assert "strategic_positioning" in stage_ids

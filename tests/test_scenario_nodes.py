@@ -1,34 +1,25 @@
-"""Tests for detect_scenario and map_equity_opportunities workflow nodes."""
-
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
 
-import pytest
-
-from faultline.models.contracts import (
-    EquityOpportunity,
-    EventCluster,
-    FinalReport,
-    ScenarioDetection,
-)
+from faultline.graph.workflow import StrategicSwarmWorkflow
+from faultline.models import EventCluster, RawSignal
+from faultline.persistence.store import SignalStore
+from faultline.providers.normalizer import SignalNormalizer
 from faultline.synthesis.report_builder import render_markdown
 
-# ── Fixtures ──────────────────────────────────────────────────────────────────
 
-
-def _make_cluster(n_signals: int = 5) -> EventCluster:
+def _make_cluster() -> EventCluster:
     return EventCluster(
         cluster_id="c1",
-        story_key="us_iran_escalation",
-        canonical_title="US-Iran Military Escalation",
-        summary="US strikes on Iranian nuclear facilities trigger regional response.",
-        region="Middle East",
-        entities=["United States", "Iran", "IRGC"],
-        tags=["military", "nuclear", "sanctions"],
+        story_key="global::open-source-protocol",
+        canonical_title="Open stack pressures bundled incumbent",
+        summary="Customers seek portability while the incumbent defends pricing.",
+        region="Global",
+        entities=["Open Builder Network", "Enterprise Cloud Suite"],
+        tags=["open-source", "protocol", "market-stress", "portability"],
         source_families=["news", "market"],
-        signal_ids=[f"sig_{i}" for i in range(n_signals)],
+        signal_ids=["sig-1", "sig-2"],
         first_seen_at=datetime(2026, 3, 9, tzinfo=timezone.utc),
         last_seen_at=datetime(2026, 3, 9, tzinfo=timezone.utc),
         novelty_score=0.9,
@@ -37,303 +28,104 @@ def _make_cluster(n_signals: int = 5) -> EventCluster:
     )
 
 
-def _base_state(cluster: EventCluster | None = None) -> dict:
-    c = cluster or _make_cluster()
+def _make_state(cluster: EventCluster | None = None) -> dict:
+    raw = [
+        RawSignal(
+            id="sig-1",
+            provider_name="sample",
+            provider_item_id="sig-1",
+            source="news",
+            timestamp=datetime(2026, 3, 9, tzinfo=timezone.utc),
+            fetched_at=datetime(2026, 3, 9, tzinfo=timezone.utc),
+            published_at=datetime(2026, 3, 9, tzinfo=timezone.utc),
+            signal_type="technology",
+            title="Open stack pressures bundled incumbent",
+            summary="Customers seek portability while the incumbent defends pricing.",
+            source_url="https://example.com/open",
+            region="Global",
+            tags=["open-source", "protocol", "portability"],
+            confidence=0.8,
+            entities=["Open Builder Network", "Enterprise Cloud Suite"],
+            payload={},
+        ),
+        RawSignal(
+            id="sig-2",
+            provider_name="sample",
+            provider_item_id="sig-2",
+            source="market",
+            timestamp=datetime(2026, 3, 10, tzinfo=timezone.utc),
+            fetched_at=datetime(2026, 3, 10, tzinfo=timezone.utc),
+            published_at=datetime(2026, 3, 10, tzinfo=timezone.utc),
+            signal_type="market",
+            title="Incumbent bundle sees margin pressure",
+            summary="Market pricing starts to reflect platform bypass risk.",
+            source_url="https://example.com/mkt",
+            region="Global",
+            tags=["market-stress", "pricing-power"],
+            confidence=0.75,
+            entities=["Enterprise Cloud Suite"],
+            payload={},
+        ),
+    ]
+    normalized_events, normalized_clusters, _ = SignalNormalizer().normalize(raw)
+    inferred_cluster = normalized_clusters[0]
+    c = (cluster or _make_cluster()).model_copy(
+        update={
+            "cluster_id": inferred_cluster.cluster_id,
+            "story_key": inferred_cluster.story_key,
+        }
+    )
     return {
         "event_clusters": [c],
         "selected_cluster": c,
-        "abstract_patterns": [],
-        "raw_signals": [],
-        "normalized_events": [],
-        "signal_bundles": [],
-        "diagnostics": {},
+        "normalized_events": normalized_events,
         "provenance": [],
+        "diagnostics": {},
         "run_mode": "demo",
     }
 
 
-# ── ScenarioDetection model ────────────────────────────────────────────────────
+def test_retrieve_related_situations_returns_memory_hits(tmp_path) -> None:
+    wf = StrategicSwarmWorkflow(store=SignalStore(f"sqlite:///{tmp_path / 'runs.sqlite'}"), live_providers=[])
+    cluster = _make_cluster()
+    state = _make_state(cluster)
 
-
-def test_scenario_detection_model_valid():
-    sd = ScenarioDetection(
-        scenario_name="US-Iran Military Escalation",
-        scenario_type="geopolitical_conflict",
-        key_actors=["United States", "Iran"],
-        geographic_scope=["Middle East", "Persian Gulf"],
-        consequence_chain=[
-            "US strikes Iranian nuclear facilities",
-            "Iran retaliates via Strait of Hormuz disruption",
-            "Global oil supply contracts by 20%",
-            "Middle East oil producers face export blockade",
-            "Alternative suppliers (Venezuela, Nigeria) gain premium",
-        ],
-        confidence=0.82,
+    previous_cluster = cluster.model_copy(
+        update={"cluster_id": "prior-1", "canonical_title": "Earlier open stack stress"}
     )
-    assert sd.scenario_name == "US-Iran Military Escalation"
-    assert len(sd.consequence_chain) == 5
-    assert sd.confidence == pytest.approx(0.82)
+    previous_snapshot = wf.mapper.map(previous_cluster, state["normalized_events"], [])
+    wf.memory.remember(previous_snapshot)
+
+    result = wf.retrieve_related_situations(state)
+
+    assert result["related_situations"]
+    assert result["related_situations"][0].situation_id == "prior-1"
 
 
-def test_scenario_detection_confidence_bounds():
-    with pytest.raises(Exception):
-        ScenarioDetection(
-            scenario_name="X",
-            scenario_type="other",
-            confidence=1.5,  # out of range
-        )
+def test_map_situation_generates_snapshot_and_predictions(tmp_path) -> None:
+    wf = StrategicSwarmWorkflow(store=SignalStore(f"sqlite:///{tmp_path / 'runs.sqlite'}"), live_providers=[])
+    state = _make_state()
+    mapped = wf.map_situation({**state, "related_situations": []})
+    assert mapped["situation_snapshot"] is not None
+    assert mapped["situation_snapshot"].mechanisms
+
+    predictions = wf.generate_predictions({**state, **mapped})
+    assert predictions["predictions"]
+    assert any(item.prediction_type == "actor_move" for item in predictions["predictions"])
 
 
-def test_scenario_detection_defaults():
-    sd = ScenarioDetection(scenario_name="Test", scenario_type="other")
-    assert sd.key_actors == []
-    assert sd.geographic_scope == []
-    assert sd.consequence_chain == []
-    assert sd.confidence == pytest.approx(0.5)
+def test_render_markdown_includes_actions_and_evidence(tmp_path) -> None:
+    wf = StrategicSwarmWorkflow(store=SignalStore(f"sqlite:///{tmp_path / 'runs.sqlite'}"), live_providers=[])
+    state = _make_state()
+    mapped = wf.map_situation({**state, "related_situations": []})
+    predictions = wf.generate_predictions({**state, **mapped})
+    implications = wf.map_market_implications({**state, **mapped, **predictions})
+    actions = wf.generate_actions({**state, **mapped, **predictions, **implications})
+    report_state = wf.synthesize_report({**state, **mapped, **predictions, **implications, **actions})
 
+    md = render_markdown(report_state["final_report"])
 
-# ── EquityOpportunity model ────────────────────────────────────────────────────
-
-
-def test_equity_opportunity_model_valid():
-    opp = EquityOpportunity(
-        symbol="REP.MC",
-        company_name="Repsol",
-        direction="long",
-        rationale="Repsol's Venezuelan operations become critical as Middle East supply collapses.",
-        scenario_link="Alternative suppliers (Venezuela) gain premium",
-        confidence=0.75,
-    )
-    assert opp.symbol == "REP.MC"
-    assert opp.direction == "long"
-    assert opp.search_summary is None
-
-
-def test_equity_opportunity_directions():
-    for direction in ("long", "short", "watch"):
-        opp = EquityOpportunity(
-            symbol="XOM",
-            company_name="ExxonMobil",
-            direction=direction,
-            rationale="Test",
-            scenario_link="Test link",
-            confidence=0.5,
-        )
-        assert opp.direction == direction
-
-
-# ── detect_scenario node ───────────────────────────────────────────────────────
-
-
-def test_detect_scenario_skips_when_no_clusters():
-    """detect_scenario returns None with no clusters."""
-    from unittest.mock import MagicMock
-
-    from faultline.graph.workflow import StrategicSwarmWorkflow
-
-    wf = StrategicSwarmWorkflow.__new__(StrategicSwarmWorkflow)
-    wf.reasoner = MagicMock()
-
-    state = _base_state()
-    state["event_clusters"] = []
-
-    result = wf.detect_scenario(state)
-
-    assert result["detected_scenario"] is None
-    assert "skipped" in result["provenance"][-1].lower()
-    wf.reasoner.refine_model.assert_not_called()
-
-
-def test_detect_scenario_produces_scenario_detection():
-    """detect_scenario calls LLM and returns a ScenarioDetection."""
-    from faultline.graph.workflow import StrategicSwarmWorkflow
-
-    expected = ScenarioDetection(
-        scenario_name="US-Iran Military Escalation",
-        scenario_type="geopolitical_conflict",
-        key_actors=["United States", "Iran"],
-        geographic_scope=["Middle East"],
-        consequence_chain=["US strikes Iran", "Hormuz disrupted", "Oil price spikes"],
-        confidence=0.88,
-    )
-
-    wf = StrategicSwarmWorkflow.__new__(StrategicSwarmWorkflow)
-    wf.reasoner = MagicMock()
-    wf.reasoner.refine_model.return_value = (
-        expected,
-        {"llm_used": True, "llm_status": "ok"},
-    )
-
-    state = _base_state()
-    result = wf.detect_scenario(state)
-
-    assert result["detected_scenario"] is expected
-    assert result["detected_scenario"].scenario_name == "US-Iran Military Escalation"
-    assert len(result["detected_scenario"].consequence_chain) == 3
-    assert "US-Iran Military Escalation" in result["provenance"][-1]
-
-
-def test_detect_scenario_uses_fallback_when_llm_disabled():
-    """detect_scenario returns fallback ScenarioDetection when LLM disabled."""
-    from faultline.graph.workflow import StrategicSwarmWorkflow
-
-    fallback = ScenarioDetection(
-        scenario_name="Unclassified macro event",
-        scenario_type="other",
-        confidence=0.0,
-    )
-
-    wf = StrategicSwarmWorkflow.__new__(StrategicSwarmWorkflow)
-    wf.reasoner = MagicMock()
-    wf.reasoner.refine_model.return_value = (
-        fallback,
-        {"llm_used": False, "llm_status": "disabled"},
-    )
-
-    state = _base_state()
-    result = wf.detect_scenario(state)
-
-    assert result["detected_scenario"].scenario_name == "Unclassified macro event"
-    assert result["detected_scenario"].confidence == pytest.approx(0.0)
-
-
-# ── map_equity_opportunities node ─────────────────────────────────────────────
-
-
-def test_map_equity_skips_when_no_scenario():
-    """map_equity_opportunities skips gracefully when no scenario is detected."""
-    from faultline.graph.workflow import StrategicSwarmWorkflow
-
-    wf = StrategicSwarmWorkflow.__new__(StrategicSwarmWorkflow)
-    wf.reasoner = MagicMock()
-    wf.web_search = MagicMock()
-    wf.web_search.enabled = False
-
-    state = _base_state()
-    state["detected_scenario"] = None
-
-    result = wf.map_equity_opportunities(state)
-
-    assert result["equity_opportunities"] == []
-    assert "skipped" in result["provenance"][-1].lower()
-    wf.reasoner.refine_model.assert_not_called()
-
-
-def test_map_equity_produces_opportunities():
-    """map_equity_opportunities returns a list of EquityOpportunity."""
-    from pydantic import BaseModel
-
-    from faultline.graph.workflow import StrategicSwarmWorkflow
-
-    class _EquityList(BaseModel):
-        opportunities: list[EquityOpportunity]
-
-    expected_opps = [
-        EquityOpportunity(
-            symbol="REP.MC",
-            company_name="Repsol",
-            direction="long",
-            rationale="Venezuela operations become critical.",
-            scenario_link="Alternative suppliers gain",
-            confidence=0.75,
-        ),
-        EquityOpportunity(
-            symbol="ARAMCO.SR",
-            company_name="Saudi Aramco",
-            direction="short",
-            rationale="Export routes blocked.",
-            scenario_link="Hormuz disrupted",
-            confidence=0.8,
-        ),
-    ]
-    equity_list = _EquityList(opportunities=expected_opps)
-
-    scenario = ScenarioDetection(
-        scenario_name="US-Iran Military Escalation",
-        scenario_type="geopolitical_conflict",
-        key_actors=["US", "Iran"],
-        geographic_scope=["Middle East"],
-        consequence_chain=[
-            "US strikes Iran",
-            "Hormuz disrupted",
-            "Alternative suppliers gain",
-        ],
-        confidence=0.85,
-    )
-
-    wf = StrategicSwarmWorkflow.__new__(StrategicSwarmWorkflow)
-    wf.reasoner = MagicMock()
-    wf.reasoner.refine_model.return_value = (
-        equity_list,
-        {"llm_used": True, "llm_status": "ok"},
-    )
-    wf.web_search = MagicMock()
-    wf.web_search.enabled = False
-
-    state = _base_state()
-    state["detected_scenario"] = scenario
-
-    result = wf.map_equity_opportunities(state)
-
-    assert len(result["equity_opportunities"]) == 2
-    symbols = [o.symbol for o in result["equity_opportunities"]]
-    assert "REP.MC" in symbols
-    assert "ARAMCO.SR" in symbols
-    assert result["diagnostics"]["equity_opportunity_count"] == 2
-    assert "US-Iran Military Escalation" in result["provenance"][-1]
-
-
-# ── render_markdown with scenario + equity ────────────────────────────────────
-
-
-def test_render_markdown_includes_scenario_and_equity():
-    """render_markdown emits Detected Scenario and Equity Signals sections."""
-    scenario = ScenarioDetection(
-        scenario_name="Energy Crisis",
-        scenario_type="energy_crisis",
-        key_actors=["OPEC", "US"],
-        geographic_scope=["Global"],
-        consequence_chain=["Supply cut", "Price spike", "Refiners squeezed"],
-        confidence=0.9,
-    )
-    equity = [
-        EquityOpportunity(
-            symbol="XOM",
-            company_name="ExxonMobil",
-            direction="long",
-            rationale="Benefits from price spike.",
-            scenario_link="Price spike",
-            confidence=0.8,
-        )
-    ]
-    report = FinalReport(
-        publication_status="publish",
-        executive_summary="Test summary.",
-        system_topology="Empire: OPEC. Disruptor: US shale.",
-        detected_scenario=scenario,
-        equity_opportunities=equity,
-    )
-    md = render_markdown(report)
-
-    assert "## Detected Scenario" in md
-    assert "Energy Crisis" in md
-    assert "Supply cut" in md  # consequence chain step
-    assert "## Equity Signals" in md
-    assert "XOM" in md
-    assert "LONG" in md
-    assert "ExxonMobil" in md
-
-
-def test_render_markdown_without_scenario_has_no_scenario_section():
-    """render_markdown omits scenario section when detected_scenario is None."""
-    report = FinalReport(
-        publication_status="monitor_only",
-        executive_summary="No scenario.",
-        system_topology="Unknown.",
-        detected_scenario=None,
-        equity_opportunities=[],
-        monitor_only_reason="Low confidence.",
-    )
-    md = render_markdown(report)
-    assert "## Detected Scenario" not in md
-    assert "## Equity Signals" not in md
+    assert "## Active Mechanisms" in md
+    assert "## Actions Now" in md
+    assert "## Exit Signals" in md
+    assert "## Evidence" in md

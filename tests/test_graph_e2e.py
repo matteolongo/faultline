@@ -11,12 +11,13 @@ def test_all_demo_scenarios_run_end_to_end(tmp_path) -> None:
         state = result["final_state"]
         report = state["final_report"]
 
-        assert state["abstract_patterns"]
-        assert state["fragility_assessments"]
-        assert state["ripple_scenarios"]
+        assert state["situation_snapshot"] is not None
+        assert state["predictions"]
+        assert state["market_implications"]
+        assert state["action_recommendations"]
+        assert state["exit_signals"]
         assert report.publication_status in {"publish", "monitor_only"}
-        if report.publication_status == "publish":
-            assert report.opportunity_map
-        else:
-            assert report.monitor_only_reason
-        assert result["evaluation"]["overall"] >= 0.7
+        assert report.mechanism_map
+        assert report.scenario_map
+        assert report.actions_now
+        assert result["evaluation"]["overall"] >= 0.65

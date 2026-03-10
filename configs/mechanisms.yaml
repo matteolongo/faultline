@@ -1,0 +1,100 @@
+version: 1
+mechanisms:
+  - id: indirect_strategy
+    name: Indirect Strategy
+    trigger_tags:
+      - bypass
+      - indirect
+      - proxy-network
+      - developer-flight
+      - rerouting
+    explanation: Pressure is applied through side channels, modular routes, or second-order leverage rather than frontal confrontation.
+
+  - id: overextension
+    name: Overextension
+    trigger_tags:
+      - debt
+      - refinancing
+      - broad-surface
+      - stretched
+      - multi-front
+    explanation: The incumbent must defend too many fronts at once, raising coordination and financing costs.
+
+  - id: coalition_drift
+    name: Coalition Drift
+    trigger_tags:
+      - alliance
+      - coalition
+      - proxy-network
+      - dissent
+      - procurement
+    explanation: Partners or customers begin seeking options that reduce dependence on the current center of power.
+
+  - id: legitimacy_erosion
+    name: Legitimacy Erosion
+    trigger_tags:
+      - protests
+      - sentiment-entropy
+      - backlash
+      - regulation
+      - reputational
+    explanation: The dominant actor loses narrative or institutional permission to act as before.
+
+  - id: chokepoint_pressure
+    name: Chokepoint Pressure
+    trigger_tags:
+      - chokepoint
+      - undersea
+      - cable
+      - corridor
+      - route
+    explanation: A narrow route or bottleneck becomes a source of leverage, risk, or repricing.
+
+  - id: platform_bypass
+    name: Platform Bypass
+    trigger_tags:
+      - open-source
+      - protocol
+      - portability
+      - interoperability
+      - plugin-ecosystem
+    explanation: A modular edge network reduces dependence on the incumbent platform or bundle.
+
+  - id: regulatory_lag
+    name: Regulatory Lag
+    trigger_tags:
+      - regulation
+      - gray-market
+      - compliance
+      - procurement
+      - sanctions
+    explanation: Policy and compliance mechanisms move more slowly than the adaptive edge.
+
+  - id: reputation_spiral
+    name: Reputation Spiral
+    trigger_tags:
+      - reputation
+      - backlash
+      - sentiment-entropy
+      - trust
+      - buyer-flight
+    explanation: Perception shifts amplify tactical weakness into broader loss of trust or demand.
+
+  - id: resource_exhaustion
+    name: Resource Exhaustion
+    trigger_tags:
+      - debt
+      - financing
+      - cost-pressure
+      - supply-strain
+    explanation: Defensive posture becomes harder to sustain as resources, pricing power, or financing weaken.
+
+  - id: timing_mismatch
+    name: Timing Mismatch
+    trigger_tags:
+      - roadmap
+      - procurement
+      - fast-adoption
+      - latency
+      - repricing
+    explanation: One actor adapts faster than another actor can respond through normal cycles.

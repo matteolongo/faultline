@@ -1,29 +1,16 @@
-from faultline.agents.pattern_matcher import PatternMatcher
-from faultline.agents.signal_alchemist import SignalAlchemist
-from faultline.providers.normalizer import SignalNormalizer
-from faultline.providers.sample import (
-    DarkSignalProvider,
-    MarketContextProvider,
-    NewsSignalProvider,
-)
-from faultline.scoring.fragility import FragilityScorer
+from faultline.evaluation.rubric import evaluate_report
+from faultline.graph.runner import StrategicSwarmRunner
 
 
-def test_fragility_scoring_produces_explanations() -> None:
-    scenario_id = "debt_defense_spiral"
-    raw = (
-        NewsSignalProvider().fetch(scenario_id)
-        + MarketContextProvider().fetch(scenario_id)
-        + DarkSignalProvider().fetch(scenario_id)
+def test_evaluation_rubric_rewards_reports_with_mechanisms_actions_and_evidence(tmp_path) -> None:
+    runner = StrategicSwarmRunner(
+        output_dir=tmp_path / "outputs",
+        database_url=f"sqlite:///{tmp_path / 'runs.sqlite'}",
     )
-    events, clusters, _ = SignalNormalizer().normalize(raw)
-    cluster = clusters[0]
-    cluster_events = [event for event in events if event.cluster_id == cluster.cluster_id]
-    patterns, _ = PatternMatcher().match(cluster_events, cluster)
-    bundles, _ = SignalAlchemist().enrich(cluster_events, cluster)
-    assessment = FragilityScorer().score(cluster_events, cluster, patterns, bundles)[0]
+    result = runner.run_demo("debt_defense_spiral")
+    report = result["final_state"]["final_report"]
+    scores = evaluate_report(report)
 
-    assert assessment.fragility_score.value > 0.5
-    assert "Composite score" in assessment.fragility_score.explanation
-    assert assessment.fragile_nodes
-    assert assessment.antifragile_nodes
+    assert scores["mechanism_quality"] > 0.5
+    assert scores["prediction_quality"] > 0.5
+    assert scores["action_quality"] > 0.5
