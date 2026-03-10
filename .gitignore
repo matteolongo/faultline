@@ -38,3 +38,6 @@ notebooks/outputs/
 
 # VSCode (settings committed, but workspace-local overrides excluded)
 .vscode/*.code-workspace
+
+# Test artifacts
+tmp/

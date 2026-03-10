@@ -215,7 +215,7 @@ class Prediction(BaseModel):
     related_actors: list[str] = Field(default_factory=list)
     affected_assets: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
-    confidence_band: str = "medium"
+    confidence_band: str = "speculative"
     prior_evidence: list[str] = Field(default_factory=list)
     status: str = "pending"
 
@@ -239,7 +239,7 @@ class ScenarioPath(BaseModel):
     name: str
     branch_type: str = "base_case"
     probability: float = Field(default=0.5, ge=0.0, le=1.0)
-    confidence_band: str = "medium"
+    confidence_band: str = "speculative"
     trigger_signals: list[str] = Field(default_factory=list)
     expected_moves: list[str] = Field(default_factory=list)
     market_effects: list[str] = Field(default_factory=list)
