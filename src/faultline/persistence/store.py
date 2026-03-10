@@ -11,6 +11,7 @@ from typing import Any, Iterator
 from urllib.parse import urlparse
 
 from faultline.models import (
+    CalibrationSignal,
     DeadLetterRecord,
     EventCluster,
     OutcomeRecord,
@@ -667,6 +668,68 @@ class SignalStore:
             cursor.execute(sql, [run_id])
             rows = cursor.fetchall()
         return [OutcomeRecord.model_validate(json.loads(row[0])) for row in rows]
+
+    def load_calibration_signals(self, *, exclude_run_id: str | None = None) -> list[CalibrationSignal]:
+        base_sql = """
+            SELECT
+                prediction_type,
+                COUNT(*) AS sample_size,
+                SUM(CASE WHEN outcome_status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed_count,
+                SUM(CASE WHEN outcome_status = 'partial' THEN 1 ELSE 0 END) AS partial_count,
+                SUM(CASE WHEN outcome_status = 'unconfirmed' THEN 1 ELSE 0 END) AS unconfirmed_count,
+                AVG(confidence_delta) AS avg_confidence_delta
+            FROM outcome_records
+        """
+        params: list[Any] = []
+        if exclude_run_id is not None:
+            base_sql += f" WHERE run_id != {self._placeholder()}"
+            params.append(exclude_run_id)
+        base_sql += " GROUP BY prediction_type ORDER BY prediction_type ASC"
+        with self.connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute(base_sql, params)
+            rows = cursor.fetchall()
+        signals: list[CalibrationSignal] = []
+        for row in rows:
+            prediction_type = row[0]
+            sample_size = int(row[1] or 0)
+            if sample_size == 0:
+                continue
+            confirmed_count = int(row[2] or 0)
+            partial_count = int(row[3] or 0)
+            unconfirmed_count = int(row[4] or 0)
+            avg_delta = float(row[5] or 0.0)
+            signals.append(
+                CalibrationSignal(
+                    prediction_type=prediction_type,
+                    sample_size=sample_size,
+                    confirmed_rate=confirmed_count / sample_size,
+                    partial_rate=partial_count / sample_size,
+                    unconfirmed_rate=unconfirmed_count / sample_size,
+                    average_confidence_delta=avg_delta,
+                    guidance=self._calibration_guidance(
+                        prediction_type=prediction_type,
+                        confirmed_rate=confirmed_count / sample_size,
+                        partial_rate=partial_count / sample_size,
+                        avg_delta=avg_delta,
+                    ),
+                )
+            )
+        return signals
+
+    def _calibration_guidance(
+        self,
+        *,
+        prediction_type: str,
+        confirmed_rate: float,
+        partial_rate: float,
+        avg_delta: float,
+    ) -> str:
+        if confirmed_rate >= 0.65 and avg_delta >= 0.08:
+            return f"{prediction_type} predictions have held up well; confidence can be nudged upward when structure matches."
+        if confirmed_rate + partial_rate >= 0.65:
+            return f"{prediction_type} predictions often need nuance; keep them but frame them probabilistically."
+        return f"{prediction_type} predictions have weak historical confirmation; confidence should be discounted."
 
     def save_dead_letter(self, record: DeadLetterRecord) -> None:
         sql = """

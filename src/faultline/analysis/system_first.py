@@ -5,6 +5,7 @@ from collections import Counter
 from faultline.models import (
     ActionRecommendation,
     Actor,
+    CalibrationSignal,
     EventCluster,
     EvidenceItem,
     Force,
@@ -311,7 +312,13 @@ class SituationMapper:
 
 
 class PredictionEngine:
-    def predict(self, snapshot: SituationSnapshot, cluster: EventCluster) -> list[Prediction]:
+    def predict(
+        self,
+        snapshot: SituationSnapshot,
+        cluster: EventCluster,
+        calibration_signals: list[CalibrationSignal] | None = None,
+    ) -> list[Prediction]:
+        calibration_index = {item.prediction_type: item for item in (calibration_signals or [])}
         incumbent = snapshot.key_actors[0].name if snapshot.key_actors else cluster.region
         challenger = snapshot.key_actors[1].name if len(snapshot.key_actors) > 1 else snapshot.system_under_pressure
         predictions = [
@@ -352,7 +359,22 @@ class PredictionEngine:
                 confidence=0.57 + cluster.novelty_score * 0.22,
             )
         )
-        return predictions
+        return [self._apply_calibration(item, calibration_index.get(item.prediction_type)) for item in predictions]
+
+    def _apply_calibration(self, prediction: Prediction, calibration: CalibrationSignal | None) -> Prediction:
+        if calibration is None or calibration.sample_size == 0:
+            return prediction
+        adjusted_confidence = max(
+            0.05,
+            min(
+                0.95,
+                prediction.confidence
+                + (calibration.confirmed_rate - calibration.unconfirmed_rate) * 0.08
+                + calibration.average_confidence_delta * 0.35,
+            ),
+        )
+        rationale = f"{prediction.rationale} Calibration: {calibration.guidance}"
+        return prediction.model_copy(update={"confidence": adjusted_confidence, "rationale": rationale})
 
     def _affected_assets(self, cluster: EventCluster) -> list[str]:
         tags = set(cluster.tags)

@@ -196,6 +196,16 @@ class StageAssessment(BaseModel):
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
+class CalibrationSignal(BaseModel):
+    prediction_type: str
+    sample_size: int = Field(ge=0)
+    confirmed_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    partial_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    unconfirmed_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    average_confidence_delta: float = Field(default=0.0, ge=-1.0, le=1.0)
+    guidance: str
+
+
 class Prediction(BaseModel):
     prediction_id: str | None = None
     prediction_type: str
@@ -409,6 +419,7 @@ class FinalReport(BaseModel):
     invalidation_signals: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
     references: list[str] = Field(default_factory=list)
+    calibration_notes: list[str] = Field(default_factory=list)
     provenance: list[str] = Field(default_factory=list)
     monitor_only_reason: str | None = None
     detected_scenario: ScenarioDetection | None = None

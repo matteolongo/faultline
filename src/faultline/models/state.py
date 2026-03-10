@@ -6,6 +6,7 @@ from typing_extensions import TypedDict
 
 from faultline.models.contracts import (
     ActionRecommendation,
+    CalibrationSignal,
     EventCluster,
     FinalReport,
     MarketImplication,
@@ -36,6 +37,7 @@ class FaultlineState(TypedDict, total=False):
     event_clusters: list[EventCluster]
     selected_cluster: EventCluster | None
     related_situations: list[RelatedSituation]
+    calibration_signals: list[CalibrationSignal]
     situation_snapshot: SituationSnapshot | None
     predictions: list[Prediction]
     market_implications: list[MarketImplication]

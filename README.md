@@ -1,6 +1,6 @@
 # 🌋 Faultline
 
-[![CI](https://github.com/YOUR_ORG/faultline/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_ORG/faultline/actions/workflows/ci.yml)
+[![CI](https://github.com/matteolongo/faultline/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_ORG/faultline/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![LangGraph](https://img.shields.io/badge/built%20with-LangGraph-6f42c1)](https://github.com/langchain-ai/langgraph)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)

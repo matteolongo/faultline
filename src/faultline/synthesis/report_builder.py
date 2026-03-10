@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from faultline.models import (
     ActionRecommendation,
+    CalibrationSignal,
     EventCluster,
     FinalReport,
     MarketImplication,
@@ -19,6 +20,7 @@ class ReportBuilder:
         snapshot: SituationSnapshot,
         cluster: EventCluster,
         related_situations: list[RelatedSituation],
+        calibration_signals: list[CalibrationSignal],
         predictions: list[Prediction],
         implications: list[MarketImplication],
         actions: list[ActionRecommendation],
@@ -62,6 +64,10 @@ class ReportBuilder:
         evidence = [f"{item.title}: {item.rationale}" for item in snapshot.evidence]
         references = [item.source_url for item in snapshot.evidence if item.source_url]
         references.extend(f"memory:{item.title}" for item in related_situations[:2])
+        calibration_notes = [
+            f"{item.prediction_type}: {item.guidance} sample={item.sample_size} confirmed={item.confirmed_rate:.0%}"
+            for item in calibration_signals
+        ]
 
         return FinalReport(
             publication_status=publication_status,
@@ -95,6 +101,7 @@ class ReportBuilder:
             ],
             evidence=evidence,
             references=references,
+            calibration_notes=calibration_notes,
             provenance=provenance,
             monitor_only_reason=monitor_reason,
             fragility_map=mechanism_map,
@@ -169,6 +176,9 @@ def render_markdown(report: FinalReport) -> str:
             "",
             "## Evidence",
             *[f"- {item}" for item in report.evidence],
+            "",
+            "## Calibration",
+            *[f"- {item}" for item in report.calibration_notes],
             "",
             "## References",
             *[f"- {item}" for item in report.references],
