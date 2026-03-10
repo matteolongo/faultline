@@ -1,5 +1,5 @@
-from strategic_swarm_agent.llm.backend import StructuredReasoner
-from strategic_swarm_agent.models import AbstractPattern
+from faultline.llm.backend import StructuredReasoner
+from faultline.models import AbstractPattern
 
 
 def test_structured_reasoner_falls_back_without_api_key(monkeypatch) -> None:

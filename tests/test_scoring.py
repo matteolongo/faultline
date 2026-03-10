@@ -1,12 +1,12 @@
-from strategic_swarm_agent.agents.pattern_matcher import PatternMatcher
-from strategic_swarm_agent.agents.signal_alchemist import SignalAlchemist
-from strategic_swarm_agent.providers.normalizer import SignalNormalizer
-from strategic_swarm_agent.providers.sample import (
+from faultline.agents.pattern_matcher import PatternMatcher
+from faultline.agents.signal_alchemist import SignalAlchemist
+from faultline.providers.normalizer import SignalNormalizer
+from faultline.providers.sample import (
     DarkSignalProvider,
     MarketContextProvider,
     NewsSignalProvider,
 )
-from strategic_swarm_agent.scoring.fragility import FragilityScorer
+from faultline.scoring.fragility import FragilityScorer
 
 
 def test_fragility_scoring_produces_explanations() -> None:
@@ -18,9 +18,7 @@ def test_fragility_scoring_produces_explanations() -> None:
     )
     events, clusters, _ = SignalNormalizer().normalize(raw)
     cluster = clusters[0]
-    cluster_events = [
-        event for event in events if event.cluster_id == cluster.cluster_id
-    ]
+    cluster_events = [event for event in events if event.cluster_id == cluster.cluster_id]
     patterns, _ = PatternMatcher().match(cluster_events, cluster)
     bundles, _ = SignalAlchemist().enrich(cluster_events, cluster)
     assessment = FragilityScorer().score(cluster_events, cluster, patterns, bundles)[0]

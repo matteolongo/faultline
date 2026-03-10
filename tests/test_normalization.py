@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
-from strategic_swarm_agent.models import RawSignal
-from strategic_swarm_agent.providers.normalizer import SignalNormalizer
+from faultline.models import RawSignal
+from faultline.providers.normalizer import SignalNormalizer
 
 
 def test_normalizer_dedupes_and_clusters_cross_source_story() -> None:

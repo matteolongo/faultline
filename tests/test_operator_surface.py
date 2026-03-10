@@ -1,5 +1,5 @@
-from strategic_swarm_agent.graph.runner import StrategicSwarmRunner
-from strategic_swarm_agent.presentation.operator_surface import (
+from faultline.graph.runner import StrategicSwarmRunner
+from faultline.presentation.operator_surface import (
     available_demo_scenarios,
     list_recent_runs,
     load_report_markdown,
@@ -7,7 +7,7 @@ from strategic_swarm_agent.presentation.operator_surface import (
     run_and_summarize,
     summarize_final_state,
 )
-from strategic_swarm_agent.utils.io import write_json
+from faultline.utils.io import write_json
 
 
 def test_operator_surface_summarizes_demo_run(tmp_path) -> None:

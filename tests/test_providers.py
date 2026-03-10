@@ -2,7 +2,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from strategic_swarm_agent.providers.live import (
+from faultline.providers.live import (
     AlphaVantageProvider,
     FredProvider,
     GDELTProvider,
@@ -19,9 +19,7 @@ def _load(name: str) -> dict:
 
 def test_newsapi_payload_parses_to_raw_signal() -> None:
     provider = NewsAPIProvider()
-    signals = provider.parse_everything_payload(
-        _load("newsapi_everything.json"), fetched_at=datetime.now(UTC)
-    )
+    signals = provider.parse_everything_payload(_load("newsapi_everything.json"), fetched_at=datetime.now(UTC))
     assert len(signals) == 1
     assert signals[0].provider_name == "newsapi"
     assert signals[0].source == "news"
@@ -30,9 +28,7 @@ def test_newsapi_payload_parses_to_raw_signal() -> None:
 
 def test_alphavantage_payloads_parse_news_and_quotes() -> None:
     provider = AlphaVantageProvider()
-    news = provider.parse_news_payload(
-        _load("alphavantage_news_sentiment.json"), fetched_at=datetime.now(UTC)
-    )
+    news = provider.parse_news_payload(_load("alphavantage_news_sentiment.json"), fetched_at=datetime.now(UTC))
     quotes = provider.parse_quote_payload(
         _load("alphavantage_global_quote.json"),
         symbol="QQQ",
@@ -45,9 +41,7 @@ def test_alphavantage_payloads_parse_news_and_quotes() -> None:
 
 def test_fred_payloads_parse_updates_and_observations() -> None:
     provider = FredProvider()
-    updates = provider.parse_updates_payload(
-        _load("fred_series_updates.json"), fetched_at=datetime.now(UTC)
-    )
+    updates = provider.parse_updates_payload(_load("fred_series_updates.json"), fetched_at=datetime.now(UTC))
     observations = provider.parse_observations_payload(
         _load("fred_series_observations.json"),
         series_id="DGS10",
@@ -59,9 +53,7 @@ def test_fred_payloads_parse_updates_and_observations() -> None:
 
 def test_gdelt_payload_parses_structural_event() -> None:
     provider = GDELTProvider()
-    signals = provider.parse_doc_payload(
-        _load("gdelt_doc_artlist.json"), fetched_at=datetime.now(UTC)
-    )
+    signals = provider.parse_doc_payload(_load("gdelt_doc_artlist.json"), fetched_at=datetime.now(UTC))
     assert signals[0].provider_name == "gdelt"
     assert signals[0].source == "alt"
 

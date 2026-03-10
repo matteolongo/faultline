@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from strategic_swarm_agent.models import (
+from faultline.models import (
     FinalReport,
     OpportunityIdea,
     ScoreDetail,

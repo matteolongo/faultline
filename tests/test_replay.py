@@ -1,4 +1,4 @@
-from strategic_swarm_agent.graph.runner import StrategicSwarmRunner
+from faultline.graph.runner import StrategicSwarmRunner
 
 
 def test_replay_rebuilds_report_from_stored_run(tmp_path) -> None:

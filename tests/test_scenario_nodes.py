@@ -6,13 +6,14 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
-from strategic_swarm_agent.models.contracts import (
+
+from faultline.models.contracts import (
     EquityOpportunity,
     EventCluster,
     FinalReport,
     ScenarioDetection,
 )
-from strategic_swarm_agent.synthesis.report_builder import render_markdown
+from faultline.synthesis.report_builder import render_markdown
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -128,7 +129,7 @@ def test_detect_scenario_skips_when_no_clusters():
     """detect_scenario returns None with no clusters."""
     from unittest.mock import MagicMock
 
-    from strategic_swarm_agent.graph.workflow import StrategicSwarmWorkflow
+    from faultline.graph.workflow import StrategicSwarmWorkflow
 
     wf = StrategicSwarmWorkflow.__new__(StrategicSwarmWorkflow)
     wf.reasoner = MagicMock()
@@ -145,7 +146,7 @@ def test_detect_scenario_skips_when_no_clusters():
 
 def test_detect_scenario_produces_scenario_detection():
     """detect_scenario calls LLM and returns a ScenarioDetection."""
-    from strategic_swarm_agent.graph.workflow import StrategicSwarmWorkflow
+    from faultline.graph.workflow import StrategicSwarmWorkflow
 
     expected = ScenarioDetection(
         scenario_name="US-Iran Military Escalation",
@@ -174,7 +175,7 @@ def test_detect_scenario_produces_scenario_detection():
 
 def test_detect_scenario_uses_fallback_when_llm_disabled():
     """detect_scenario returns fallback ScenarioDetection when LLM disabled."""
-    from strategic_swarm_agent.graph.workflow import StrategicSwarmWorkflow
+    from faultline.graph.workflow import StrategicSwarmWorkflow
 
     fallback = ScenarioDetection(
         scenario_name="Unclassified macro event",
@@ -201,7 +202,7 @@ def test_detect_scenario_uses_fallback_when_llm_disabled():
 
 def test_map_equity_skips_when_no_scenario():
     """map_equity_opportunities skips gracefully when no scenario is detected."""
-    from strategic_swarm_agent.graph.workflow import StrategicSwarmWorkflow
+    from faultline.graph.workflow import StrategicSwarmWorkflow
 
     wf = StrategicSwarmWorkflow.__new__(StrategicSwarmWorkflow)
     wf.reasoner = MagicMock()
@@ -221,7 +222,8 @@ def test_map_equity_skips_when_no_scenario():
 def test_map_equity_produces_opportunities():
     """map_equity_opportunities returns a list of EquityOpportunity."""
     from pydantic import BaseModel
-    from strategic_swarm_agent.graph.workflow import StrategicSwarmWorkflow
+
+    from faultline.graph.workflow import StrategicSwarmWorkflow
 
     class _EquityList(BaseModel):
         opportunities: list[EquityOpportunity]

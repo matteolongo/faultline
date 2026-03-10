@@ -1,4 +1,4 @@
-from strategic_swarm_agent.utils.config import load_archetypes
+from faultline.utils.config import load_archetypes
 
 
 def test_archetype_library_contains_required_topologies() -> None:

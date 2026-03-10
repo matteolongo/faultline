@@ -5,7 +5,7 @@
       "name": "Demo: arctic_cable_bypass",
       "type": "debugpy",
       "request": "launch",
-      "module": "strategic_swarm_agent",
+      "module": "faultline",
       "args": ["run-demo", "--scenario", "arctic_cable_bypass"],
       "cwd": "${workspaceFolder}",
       "env": {
@@ -19,7 +19,7 @@
       "name": "Demo: debt_defense_spiral",
       "type": "debugpy",
       "request": "launch",
-      "module": "strategic_swarm_agent",
+      "module": "faultline",
       "args": ["run-demo", "--scenario", "debt_defense_spiral"],
       "cwd": "${workspaceFolder}",
       "env": {
@@ -33,7 +33,7 @@
       "name": "Demo: open_model_breakout",
       "type": "debugpy",
       "request": "launch",
-      "module": "strategic_swarm_agent",
+      "module": "faultline",
       "args": ["run-demo", "--scenario", "open_model_breakout"],
       "cwd": "${workspaceFolder}",
       "env": {
@@ -47,7 +47,7 @@
       "name": "Live: last 60 minutes",
       "type": "debugpy",
       "request": "launch",
-      "module": "strategic_swarm_agent",
+      "module": "faultline",
       "args": ["run-latest", "--lookback-minutes", "60"],
       "cwd": "${workspaceFolder}",
       "env": {
@@ -61,7 +61,7 @@
       "name": "Provider Health Check",
       "type": "debugpy",
       "request": "launch",
-      "module": "strategic_swarm_agent",
+      "module": "faultline",
       "args": ["provider-health"],
       "cwd": "${workspaceFolder}",
       "env": {
@@ -75,7 +75,7 @@
       "name": "Run All Demos + Evaluate",
       "type": "debugpy",
       "request": "launch",
-      "module": "strategic_swarm_agent",
+      "module": "faultline",
       "args": ["run-all-demos"],
       "cwd": "${workspaceFolder}",
       "env": {

@@ -3,9 +3,9 @@ requires = ["hatchling>=1.25.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "strategic-swarm-agent"
+name = "faultline"
 version = "0.1.0"
-description = "Structural fragility and asymmetric disruption reasoning engine."
+description = "Geopolitical structural fragility engine. Turns live signals into asymmetric opportunity intelligence."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -35,10 +35,10 @@ operator = [
 ]
 
 [project.scripts]
-strategic-swarm-agent = "strategic_swarm_agent.__main__:main"
+faultline = "faultline.__main__:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/strategic_swarm_agent"]
+packages = ["src/faultline"]
 
 [tool.pytest.ini_options]
 pythonpath = [
