@@ -197,6 +197,7 @@ class StageAssessment(BaseModel):
 
 
 class Prediction(BaseModel):
+    prediction_id: str | None = None
     prediction_type: str
     description: str
     rationale: str
@@ -205,6 +206,21 @@ class Prediction(BaseModel):
     affected_assets: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     status: str = "pending"
+
+    @model_validator(mode="after")
+    def populate_prediction_id(self) -> "Prediction":
+        if self.prediction_id is None:
+            seed = "::".join(
+                [
+                    self.prediction_type,
+                    self.description,
+                    self.time_horizon,
+                    ",".join(self.related_actors),
+                    ",".join(self.affected_assets),
+                ]
+            )
+            self.prediction_id = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
+        return self
 
 
 class ScenarioPath(BaseModel):
@@ -269,6 +285,7 @@ class SituationSnapshot(BaseModel):
 
 
 class OutcomeRecord(BaseModel):
+    prediction_id: str
     prediction_type: str
     target: str
     outcome_status: str

@@ -55,6 +55,12 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--end", default=None)
     replay.add_argument("--output-dir", default=None)
 
+    score_followup = subparsers.add_parser("score-followup", help="Score predictions against follow-up stored signals")
+    score_followup.add_argument("--run-id", required=True)
+    score_followup.add_argument("--start", required=True)
+    score_followup.add_argument("--end", required=True)
+    score_followup.add_argument("--output-dir", default=None)
+
     signals = subparsers.add_parser("list-signals", help="List persisted raw signals")
     signals.add_argument("--limit", type=int, default=25)
     signals.add_argument("--provider", default=None)
@@ -140,6 +146,15 @@ def main() -> None:
             end_at=_parse_datetime(args.end) if args.end else None,
         )
         print(json.dumps({"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2))
+        return
+
+    if args.command == "score-followup":
+        result = runner.score_followup(
+            run_id=args.run_id,
+            start_at=_parse_datetime(args.start),
+            end_at=_parse_datetime(args.end),
+        )
+        print(json.dumps(result, indent=2))
         return
 
     if args.command == "list-signals":

@@ -13,6 +13,8 @@ from urllib.parse import urlparse
 from faultline.models import (
     DeadLetterRecord,
     EventCluster,
+    OutcomeRecord,
+    Prediction,
     ProviderHealthStatus,
     PublishedReport,
     RawSignal,
@@ -155,6 +157,29 @@ class SignalStore:
                 published_at TEXT NOT NULL,
                 report_json TEXT NOT NULL,
                 diagnostics_json TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS predictions (
+                prediction_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                prediction_type TEXT NOT NULL,
+                time_horizon TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                status TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS outcome_records (
+                prediction_id TEXT NOT NULL,
+                run_id TEXT NOT NULL,
+                prediction_type TEXT NOT NULL,
+                target TEXT NOT NULL,
+                outcome_status TEXT NOT NULL,
+                confidence_delta REAL NOT NULL,
+                payload_json TEXT NOT NULL,
+                PRIMARY KEY (run_id, prediction_id)
             )
             """,
             """
@@ -515,6 +540,84 @@ class SignalStore:
                     json.dumps(serialize_model(report.diagnostics)),
                 ),
             )
+
+    def save_predictions(self, *, run_id: str, predictions: list[Prediction]) -> None:
+        if not predictions:
+            return
+        sql = """
+            INSERT OR REPLACE INTO predictions (
+                prediction_id, run_id, prediction_type, time_horizon, confidence, status, payload_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
+        if self.scheme.startswith("postgres"):
+            sql = """
+                INSERT INTO predictions (
+                    prediction_id, run_id, prediction_type, time_horizon, confidence, status, payload_json
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (prediction_id) DO UPDATE SET payload_json = EXCLUDED.payload_json
+            """
+        rows = [
+            (
+                prediction.prediction_id,
+                run_id,
+                prediction.prediction_type,
+                prediction.time_horizon,
+                prediction.confidence,
+                prediction.status,
+                json.dumps(serialize_model(prediction)),
+            )
+            for prediction in predictions
+        ]
+        with self.connection() as connection:
+            connection.cursor().executemany(sql, rows)
+
+    def load_predictions_for_run(self, run_id: str) -> list[Prediction]:
+        placeholder = self._placeholder()
+        sql = f"SELECT payload_json FROM predictions WHERE run_id = {placeholder} ORDER BY prediction_type ASC"
+        with self.connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute(sql, [run_id])
+            rows = cursor.fetchall()
+        return [Prediction.model_validate(json.loads(row[0])) for row in rows]
+
+    def save_outcome_records(self, *, run_id: str, outcomes: list[OutcomeRecord]) -> None:
+        if not outcomes:
+            return
+        sql = """
+            INSERT OR REPLACE INTO outcome_records (
+                prediction_id, run_id, prediction_type, target, outcome_status, confidence_delta, payload_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
+        if self.scheme.startswith("postgres"):
+            sql = """
+                INSERT INTO outcome_records (
+                    prediction_id, run_id, prediction_type, target, outcome_status, confidence_delta, payload_json
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (run_id, prediction_id) DO UPDATE SET payload_json = EXCLUDED.payload_json
+            """
+        rows = [
+            (
+                outcome.prediction_id,
+                run_id,
+                outcome.prediction_type,
+                outcome.target,
+                outcome.outcome_status,
+                outcome.confidence_delta,
+                json.dumps(serialize_model(outcome)),
+            )
+            for outcome in outcomes
+        ]
+        with self.connection() as connection:
+            connection.cursor().executemany(sql, rows)
+
+    def load_outcomes_for_run(self, run_id: str) -> list[OutcomeRecord]:
+        placeholder = self._placeholder()
+        sql = f"SELECT payload_json FROM outcome_records WHERE run_id = {placeholder} ORDER BY prediction_type ASC"
+        with self.connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute(sql, [run_id])
+            rows = cursor.fetchall()
+        return [OutcomeRecord.model_validate(json.loads(row[0])) for row in rows]
 
     def save_dead_letter(self, record: DeadLetterRecord) -> None:
         sql = """

@@ -7,8 +7,9 @@ from uuid import uuid4
 
 from faultline.evaluation.rubric import evaluate_report
 from faultline.graph.workflow import StrategicSwarmWorkflow
-from faultline.models import PublishedReport, RawSignal
+from faultline.models import OutcomeRecord, Prediction, PublishedReport, RawSignal
 from faultline.persistence.store import SignalStore
+from faultline.prediction import OutcomeEvaluator
 from faultline.providers.registry import build_live_providers
 from faultline.providers.sample import SampleScenarioRepository
 from faultline.synthesis.report_builder import render_markdown
@@ -36,6 +37,7 @@ class StrategicSwarmRunner:
         )
         self.store = SignalStore(self.database_url)
         self.workflow = StrategicSwarmWorkflow(store=self.store, live_providers=build_live_providers()).build()
+        self.outcome_evaluator = OutcomeEvaluator()
 
     def run_demo(self, scenario_id: str) -> dict:
         return self._run(initial_state={"scenario_id": scenario_id, "run_mode": "demo"})
@@ -115,6 +117,39 @@ class StrategicSwarmRunner:
     def evaluate_goldset(self, scenario_ids: list[str]) -> list[dict]:
         return [self.evaluate(scenario_id) for scenario_id in scenario_ids]
 
+    def score_followup(
+        self,
+        *,
+        run_id: str,
+        followup_signals: list[RawSignal | dict] | None = None,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+    ) -> dict:
+        predictions = self.store.load_predictions_for_run(run_id)
+        if not predictions:
+            previous = self.store.get_run_state(run_id)
+            if not previous:
+                raise ValueError(f"Unknown run_id: {run_id}")
+            predictions = [Prediction.model_validate(item) for item in previous.get("predictions", [])]
+        if followup_signals is not None:
+            signals = [
+                signal if isinstance(signal, RawSignal) else RawSignal.model_validate(signal)
+                for signal in followup_signals
+            ]
+        else:
+            if not start_at or not end_at:
+                raise ValueError("Follow-up scoring requires explicit signals or start_at/end_at.")
+            signals = self.store.load_raw_signals_for_window(start_at, end_at)
+        outcomes = self.outcome_evaluator.score(predictions, signals)
+        self.store.save_outcome_records(run_id=run_id, outcomes=outcomes)
+        summary = self._summarize_outcomes(outcomes)
+        return {
+            "run_id": run_id,
+            "followup_signal_count": len(signals),
+            "outcomes": [item.model_dump(mode="json") for item in outcomes],
+            "summary": summary,
+        }
+
     def list_signals(self, *, limit: int = 25, provider_name: str | None = None) -> list[dict]:
         return self.store.list_raw_signals(limit=limit, provider_name=provider_name)
 
@@ -165,6 +200,7 @@ class StrategicSwarmRunner:
             final_state=serialize_model(final_state),
             trace=serialize_model(snapshots),
         )
+        self.store.save_predictions(run_id=run_id, predictions=final_state.get("predictions", []))
         if final_state.get("final_report") is not None and final_state.get("selected_cluster") is not None:
             self.store.save_report(
                 PublishedReport(
@@ -190,6 +226,13 @@ class StrategicSwarmRunner:
 
     def _parse_time(self, value: str | None) -> datetime | None:
         return datetime.fromisoformat(value) if value else None
+
+    def _summarize_outcomes(self, outcomes: list[OutcomeRecord]) -> dict[str, int]:
+        counts = {"confirmed": 0, "partial": 0, "unconfirmed": 0}
+        for item in outcomes:
+            if item.outcome_status in counts:
+                counts[item.outcome_status] += 1
+        return counts
 
 
 def default_goldset() -> list[str]:
