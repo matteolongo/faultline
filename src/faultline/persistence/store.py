@@ -526,6 +526,48 @@ class SignalStore:
             row = cursor.fetchone()
         return json.loads(row[0]) if row else None
 
+    def list_runs_for_followup(
+        self,
+        *,
+        cutoff_time: datetime,
+        limit: int = 20,
+        include_demo: bool = False,
+        include_scored: bool = False,
+    ) -> list[dict[str, Any]]:
+        placeholder = self._placeholder()
+        sql = (
+            "SELECT r.run_id, r.run_mode, r.scenario_id, COALESCE(r.window_end, r.started_at) AS anchor_time, "
+            "COUNT(DISTINCT p.prediction_id) AS prediction_count, COUNT(DISTINCT o.prediction_id) AS scored_count "
+            "FROM runs r "
+            "JOIN predictions p ON p.run_id = r.run_id "
+            "LEFT JOIN outcome_records o ON o.run_id = r.run_id "
+            "WHERE COALESCE(r.window_end, r.started_at) < " + placeholder
+        )
+        params: list[Any] = [cutoff_time.isoformat()]
+        if not include_demo:
+            sql += " AND r.run_mode != " + placeholder
+            params.append("demo")
+        sql += " GROUP BY r.run_id, r.run_mode, r.scenario_id, anchor_time HAVING COUNT(DISTINCT p.prediction_id) > 0"
+        if not include_scored:
+            sql += " AND COUNT(DISTINCT o.prediction_id) = 0"
+        sql += " ORDER BY anchor_time DESC LIMIT " + placeholder
+        params.append(limit)
+        with self.connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+        return [
+            {
+                "run_id": row[0],
+                "run_mode": row[1],
+                "scenario_id": row[2],
+                "anchor_time": datetime.fromisoformat(row[3]),
+                "prediction_count": int(row[4] or 0),
+                "scored_count": int(row[5] or 0),
+            }
+            for row in rows
+        ]
+
     def save_report(self, report: PublishedReport) -> None:
         sql = """
             INSERT OR REPLACE INTO reports (
