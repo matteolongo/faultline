@@ -18,6 +18,7 @@ from faultline.models.contracts import (
     Mechanism,
     OpportunityIdea,
     OutcomeRecord,
+    PortfolioPosition,
     Prediction,
     ProviderHealthStatus,
     PublishedReport,
@@ -33,6 +34,7 @@ from faultline.models.contracts import (
     SignalEvent,
     SituationSnapshot,
     StageAssessment,
+    WatchlistEntry,
 )
 from faultline.models.state import FaultlineInputSchema, FaultlineState
 
@@ -56,6 +58,7 @@ __all__ = [
     "Mechanism",
     "OpportunityIdea",
     "OutcomeRecord",
+    "PortfolioPosition",
     "Prediction",
     "ProviderHealthStatus",
     "PublishedReport",
@@ -71,6 +74,7 @@ __all__ = [
     "SignalEvent",
     "SituationSnapshot",
     "StageAssessment",
+    "WatchlistEntry",
     "FaultlineState",
     "FaultlineInputSchema",
 ]

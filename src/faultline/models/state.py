@@ -11,12 +11,14 @@ from faultline.models.contracts import (
     FinalReport,
     MarketImplication,
     OutcomeRecord,
+    PortfolioPosition,
     Prediction,
     ProviderHealthStatus,
     RawSignal,
     RelatedSituation,
     SignalEvent,
     SituationSnapshot,
+    WatchlistEntry,
 )
 
 
@@ -25,6 +27,8 @@ class FaultlineInputSchema(TypedDict, total=False):
     run_mode: str
     window_start: str
     window_end: str
+    portfolio_positions: list[PortfolioPosition]
+    watchlist: list[WatchlistEntry]
 
 
 class FaultlineState(TypedDict, total=False):
@@ -32,6 +36,8 @@ class FaultlineState(TypedDict, total=False):
     run_mode: str
     window_start: str
     window_end: str
+    portfolio_positions: list[PortfolioPosition]
+    watchlist: list[WatchlistEntry]
     raw_signals: list[RawSignal]
     normalized_events: list[SignalEvent]
     event_clusters: list[EventCluster]
@@ -43,6 +49,7 @@ class FaultlineState(TypedDict, total=False):
     market_implications: list[MarketImplication]
     action_recommendations: list[ActionRecommendation]
     exit_signals: list[ActionRecommendation]
+    endangered_symbols: list[str]
     outcome_records: list[OutcomeRecord]
     final_report: FinalReport | None
     diagnostics: dict[str, Any]

@@ -25,6 +25,7 @@ class ReportBuilder:
         implications: list[MarketImplication],
         actions: list[ActionRecommendation],
         exits: list[ActionRecommendation],
+        endangered_symbols: list[str],
         provenance: list[str],
     ) -> FinalReport:
         publishable = cluster.agreement_score >= 0.55 and snapshot.confidence >= 0.55 and bool(implications)
@@ -95,6 +96,7 @@ class ReportBuilder:
             market_implications=market_lines,
             actions_now=action_lines,
             exit_signals=exit_lines,
+            endangered_symbols=endangered_symbols,
             risks=snapshot.risks,
             open_questions=[
                 "What follow-up signal would most clearly confirm the current mechanism?",
@@ -168,6 +170,9 @@ def render_markdown(report: FinalReport) -> str:
         "",
         "## Exit Signals",
         *[f"- {item}" for item in report.exit_signals],
+        "",
+        "## Endangered Symbols",
+        *[f"- {item}" for item in report.endangered_symbols],
     ]
     if report.monitor_only_reason:
         lines.extend(["", "## Monitor Only Reason", report.monitor_only_reason])

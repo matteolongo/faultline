@@ -7,7 +7,14 @@ from uuid import uuid4
 
 from faultline.evaluation.rubric import evaluate_report
 from faultline.graph.workflow import StrategicSwarmWorkflow
-from faultline.models import OutcomeRecord, Prediction, PublishedReport, RawSignal
+from faultline.models import (
+    OutcomeRecord,
+    PortfolioPosition,
+    Prediction,
+    PublishedReport,
+    RawSignal,
+    WatchlistEntry,
+)
 from faultline.persistence.store import SignalStore
 from faultline.prediction import OutcomeEvaluator
 from faultline.providers.registry import build_live_providers
@@ -39,23 +46,56 @@ class StrategicSwarmRunner:
         self.workflow = StrategicSwarmWorkflow(store=self.store, live_providers=build_live_providers()).build()
         self.outcome_evaluator = OutcomeEvaluator()
 
-    def run_demo(self, scenario_id: str) -> dict:
-        return self._run(initial_state={"scenario_id": scenario_id, "run_mode": "demo"})
+    def run_demo(
+        self,
+        scenario_id: str,
+        *,
+        portfolio_positions: list[PortfolioPosition | dict] | None = None,
+        watchlist: list[WatchlistEntry | dict] | None = None,
+    ) -> dict:
+        return self._run(
+            initial_state={
+                "scenario_id": scenario_id,
+                "run_mode": "demo",
+                "portfolio_positions": portfolio_positions or [],
+                "watchlist": watchlist or [],
+            }
+        )
 
-    def run_live(self, *, start_at: datetime, end_at: datetime) -> dict:
+    def run_live(
+        self,
+        *,
+        start_at: datetime,
+        end_at: datetime,
+        portfolio_positions: list[PortfolioPosition | dict] | None = None,
+        watchlist: list[WatchlistEntry | dict] | None = None,
+    ) -> dict:
         return self._run(
             initial_state={
                 "run_mode": "live",
                 "window_start": start_at.isoformat(),
                 "window_end": end_at.isoformat(),
+                "portfolio_positions": portfolio_positions or [],
+                "watchlist": watchlist or [],
             }
         )
 
-    def run_latest(self, *, lookback_minutes: int | None = None) -> dict:
+    def run_latest(
+        self,
+        *,
+        lookback_minutes: int | None = None,
+        portfolio_positions: list[PortfolioPosition | dict] | None = None,
+        watchlist: list[WatchlistEntry | dict] | None = None,
+    ) -> dict:
         lookback = lookback_minutes or int(os.getenv("FAULTLINE_DEFAULT_LOOKBACK_MINUTES", "60"))
         end_at = datetime.now(UTC)
         start_at = end_at - timedelta(minutes=lookback)
-        return self.run_live(start_at=start_at, end_at=end_at)
+        return self.run_live(
+            start_at=start_at,
+            end_at=end_at,
+            portfolio_positions=portfolio_positions,
+            watchlist=watchlist,
+        )
 
     def ingest_window(self, *, start_at: datetime, end_at: datetime) -> dict:
         result = self.run_live(start_at=start_at, end_at=end_at)
@@ -183,6 +223,14 @@ class StrategicSwarmRunner:
                 signal if isinstance(signal, RawSignal) else RawSignal.model_validate(signal)
                 for signal in initial_state["raw_signals"]
             ]
+        initial_state["portfolio_positions"] = [
+            item if isinstance(item, PortfolioPosition) else PortfolioPosition.model_validate(item)
+            for item in initial_state.get("portfolio_positions", [])
+        ]
+        initial_state["watchlist"] = [
+            item if isinstance(item, WatchlistEntry) else WatchlistEntry.model_validate(item)
+            for item in initial_state.get("watchlist", [])
+        ]
         initial_state = {
             **initial_state,
             "diagnostics": {"run_id": run_id},

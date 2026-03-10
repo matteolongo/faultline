@@ -262,6 +262,22 @@ class ActionRecommendation(BaseModel):
     thesis_type: str | None = None
 
 
+class PortfolioPosition(BaseModel):
+    symbol: str
+    direction: str = "long"
+    quantity: float = 1.0
+    cost_basis: float | None = None
+    tags: list[str] = Field(default_factory=list)
+    notes: str | None = None
+
+
+class WatchlistEntry(BaseModel):
+    symbol: str
+    bias: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    notes: str | None = None
+
+
 class ExitSignal(BaseModel):
     target: str
     description: str
@@ -415,6 +431,7 @@ class FinalReport(BaseModel):
     market_implications: list[str] = Field(default_factory=list)
     actions_now: list[str] = Field(default_factory=list)
     exit_signals: list[str] = Field(default_factory=list)
+    endangered_symbols: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
     open_questions: list[str] = Field(default_factory=list)
     invalidation_signals: list[str] = Field(default_factory=list)

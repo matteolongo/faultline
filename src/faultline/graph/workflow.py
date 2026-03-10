@@ -243,17 +243,21 @@ class StrategicSwarmWorkflow:
             return {
                 "action_recommendations": [],
                 "exit_signals": [],
+                "endangered_symbols": [],
                 "provenance": [*state.get("provenance", []), "Action generation skipped."],
             }
-        actions, exits = self.action_engine.generate(
+        actions, exits, endangered_symbols = self.action_engine.generate(
             snapshot,
             state.get("market_implications", []),
             state.get("predictions", []),
             state.get("calibration_signals", []),
+            state.get("portfolio_positions", []),
+            state.get("watchlist", []),
         )
         return {
             "action_recommendations": actions,
             "exit_signals": exits,
+            "endangered_symbols": endangered_symbols,
             "provenance": [*state.get("provenance", []), f"Generated {len(actions)} actions and {len(exits)} exits."],
         }
 
@@ -275,6 +279,7 @@ class StrategicSwarmWorkflow:
             implications=state.get("market_implications", []),
             actions=state.get("action_recommendations", []),
             exits=state.get("exit_signals", []),
+            endangered_symbols=state.get("endangered_symbols", []),
             provenance=state.get("provenance", []),
         )
         return {
