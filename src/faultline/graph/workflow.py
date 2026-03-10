@@ -211,11 +211,26 @@ class StrategicSwarmWorkflow:
         snapshot = state.get("situation_snapshot")
         cluster = state.get("selected_cluster")
         if snapshot is None or cluster is None:
-            return {"predictions": [], "provenance": [*state.get("provenance", []), "Prediction skipped."]}
-        predictions = self.prediction_engine.predict(snapshot, cluster, state.get("calibration_signals", []))
+            return {
+                "predictions": [],
+                "scenario_tree": [],
+                "stage_transition_warnings": [],
+                "provenance": [*state.get("provenance", []), "Prediction skipped."],
+            }
+        predictions, scenario_tree, stage_transition_warnings = self.prediction_engine.predict(
+            snapshot,
+            cluster,
+            state.get("calibration_signals", []),
+        )
         return {
             "predictions": predictions,
-            "provenance": [*state.get("provenance", []), f"Generated {len(predictions)} explicit predictions."],
+            "scenario_tree": scenario_tree,
+            "stage_transition_warnings": stage_transition_warnings,
+            "provenance": [
+                *state.get("provenance", []),
+                f"Generated {len(predictions)} predictions, {len(scenario_tree)} scenario branches, "
+                f"and {len(stage_transition_warnings)} stage warnings.",
+            ],
         }
 
     def map_market_implications(self, state: FaultlineState) -> FaultlineState:
@@ -253,6 +268,7 @@ class StrategicSwarmWorkflow:
             state.get("calibration_signals", []),
             state.get("portfolio_positions", []),
             state.get("watchlist", []),
+            state.get("stage_transition_warnings", []),
         )
         return {
             "action_recommendations": actions,
@@ -276,6 +292,8 @@ class StrategicSwarmWorkflow:
             related_situations=state.get("related_situations", []),
             calibration_signals=state.get("calibration_signals", []),
             predictions=state.get("predictions", []),
+            scenario_tree=state.get("scenario_tree", []),
+            stage_transition_warnings=state.get("stage_transition_warnings", []),
             implications=state.get("market_implications", []),
             actions=state.get("action_recommendations", []),
             exits=state.get("exit_signals", []),

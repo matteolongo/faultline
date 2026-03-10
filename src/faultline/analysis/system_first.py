@@ -15,9 +15,11 @@ from faultline.models import (
     Prediction,
     RelatedSituation,
     Relation,
+    ScenarioPath,
     SignalEvent,
     SituationSnapshot,
     StageAssessment,
+    StageTransitionWarning,
     WatchlistEntry,
 )
 from faultline.utils.config import load_mechanisms, load_stages
@@ -47,6 +49,17 @@ CONSTRAINT_TAGS = {
 }
 TECH_OPEN_TAGS = {"open-source", "protocol", "portability", "plugin-ecosystem", "developer-tools"}
 FINANCIAL_STRESS_TAGS = {"debt", "refinancing", "spread-widening", "market-stress", "cloud-spend"}
+ASYMMETRY_CONFIDENCE_MIN = 0.58
+HIGH_CONFIDENCE_MIN = 0.74
+STAGE_SEQUENCE = [
+    "latent_tension",
+    "signal_emergence",
+    "pattern_formation",
+    "strategic_positioning",
+    "open_contestation",
+    "repricing",
+    "exhaustion_or_reversal",
+]
 
 
 def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) -> dict[str, CalibrationSignal]:
@@ -323,10 +336,12 @@ class PredictionEngine:
         snapshot: SituationSnapshot,
         cluster: EventCluster,
         calibration_signals: list[CalibrationSignal] | None = None,
-    ) -> list[Prediction]:
+    ) -> tuple[list[Prediction], list[ScenarioPath], list[StageTransitionWarning]]:
         calibration_index = _calibration_by_type(calibration_signals)
         incumbent = snapshot.key_actors[0].name if snapshot.key_actors else cluster.region
         challenger = snapshot.key_actors[1].name if len(snapshot.key_actors) > 1 else snapshot.system_under_pressure
+        priors = self._prediction_priors(snapshot, cluster)
+        affected_assets = self._affected_assets(cluster)
         predictions = [
             Prediction(
                 prediction_type="actor_move",
@@ -335,6 +350,7 @@ class PredictionEngine:
                 time_horizon="1-4 weeks",
                 related_actors=[incumbent, challenger],
                 confidence=min(0.92, snapshot.confidence * 0.9),
+                prior_evidence=priors,
             ),
             Prediction(
                 prediction_type="narrative",
@@ -343,6 +359,7 @@ class PredictionEngine:
                 time_horizon="days to weeks",
                 related_actors=[incumbent],
                 confidence=0.6 + cluster.agreement_score * 0.2,
+                prior_evidence=priors,
             ),
         ]
         if cluster.source_families and "market" in cluster.source_families:
@@ -352,8 +369,9 @@ class PredictionEngine:
                     description="Assets tied to flexibility and neutral infrastructure should outperform exposed incumbents.",
                     rationale="Cross-source confirmation plus market-linked signals imply repricing pressure.",
                     time_horizon="1-8 weeks",
-                    affected_assets=self._affected_assets(cluster),
+                    affected_assets=affected_assets,
                     confidence=0.58 + cluster.cluster_strength * 0.2,
+                    prior_evidence=priors,
                 )
             )
         predictions.append(
@@ -363,13 +381,32 @@ class PredictionEngine:
                 rationale="Stage progression compresses edge once the repricing story is obvious.",
                 time_horizon="immediate",
                 confidence=0.57 + cluster.novelty_score * 0.22,
+                prior_evidence=priors,
             )
         )
-        return [self._apply_calibration(item, calibration_index.get(item.prediction_type)) for item in predictions]
+        calibrated_predictions = [
+            self._apply_calibration(item, calibration_index.get(item.prediction_type)) for item in predictions
+        ]
+        scenario_tree = self._scenario_tree(
+            snapshot=snapshot,
+            cluster=cluster,
+            incumbent=incumbent,
+            challenger=challenger,
+            affected_assets=affected_assets,
+            priors=priors,
+        )
+        calibrated_tree = [
+            self._apply_scenario_calibration(item, calibration_index.get("asset_repricing")) for item in scenario_tree
+        ]
+        warnings = self._stage_transition_warnings(snapshot=snapshot, cluster=cluster, priors=priors)
+        calibrated_warnings = [
+            self._apply_warning_calibration(item, calibration_index.get("timing_window")) for item in warnings
+        ]
+        return calibrated_predictions, calibrated_tree, calibrated_warnings
 
     def _apply_calibration(self, prediction: Prediction, calibration: CalibrationSignal | None) -> Prediction:
         if calibration is None or calibration.sample_size == 0:
-            return prediction
+            return prediction.model_copy(update={"confidence_band": self._confidence_band(prediction.confidence)})
         adjusted_confidence = max(
             0.05,
             min(
@@ -380,7 +417,178 @@ class PredictionEngine:
             ),
         )
         rationale = f"{prediction.rationale} Calibration: {calibration.guidance}"
-        return prediction.model_copy(update={"confidence": adjusted_confidence, "rationale": rationale})
+        return prediction.model_copy(
+            update={
+                "confidence": adjusted_confidence,
+                "confidence_band": self._confidence_band(adjusted_confidence),
+                "rationale": rationale,
+            }
+        )
+
+    def _prediction_priors(self, snapshot: SituationSnapshot, cluster: EventCluster) -> list[str]:
+        priors = [
+            f"{cluster.agreement_score:.0%} cross-source agreement in current cluster.",
+            f"{cluster.cluster_strength:.0%} cluster strength across {len(cluster.source_families)} source families.",
+            f"{snapshot.stage.stage} stage with mechanism {snapshot.mechanisms[0].name}.",
+        ]
+        if snapshot.evidence:
+            priors.append(f"Lead evidence: {snapshot.evidence[0].title}.")
+        return priors
+
+    def _scenario_tree(
+        self,
+        *,
+        snapshot: SituationSnapshot,
+        cluster: EventCluster,
+        incumbent: str,
+        challenger: str,
+        affected_assets: list[str],
+        priors: list[str],
+    ) -> list[ScenarioPath]:
+        base_probability = min(0.72, 0.42 + cluster.agreement_score * 0.2 + cluster.cluster_strength * 0.15)
+        acceleration_probability = min(0.5, 0.18 + cluster.novelty_score * 0.25)
+        reversal_probability = max(0.14, 1.0 - (base_probability + acceleration_probability))
+        branches = [
+            ScenarioPath(
+                name="Base case: controlled response with gradual repricing",
+                branch_type="base_case",
+                probability=base_probability,
+                confidence_band=self._confidence_band(base_probability),
+                trigger_signals=[priors[0], "Follow-up signals confirm defensive incumbent moves."],
+                expected_moves=[
+                    f"{incumbent} defends the core surface with repricing and tighter bundling.",
+                    f"{challenger} keeps capturing edge use-cases while avoiding direct confrontation.",
+                ],
+                market_effects=[
+                    "Relative outperformance persists for adaptable or neutral infrastructure names.",
+                    f"Pressure remains on {', '.join(affected_assets[:1])} if execution weakens.",
+                ],
+                timeframe="1-8 weeks",
+            ),
+            ScenarioPath(
+                name="Bull case: transition accelerates before incumbents adapt",
+                branch_type="upside",
+                probability=acceleration_probability,
+                confidence_band=self._confidence_band(acceleration_probability),
+                trigger_signals=[
+                    "Additional alliance or distribution shifts toward open alternatives.",
+                    "Narrative moves from debate to implementation urgency.",
+                ],
+                expected_moves=[
+                    f"{challenger} coalition gains distribution and mindshare quickly.",
+                    "Buyers increase migration pace and reduce tolerance for lock-in.",
+                ],
+                market_effects=["Fast repricing in beneficiaries and abrupt derating in lagging incumbents."],
+                timeframe="days to 4 weeks",
+            ),
+            ScenarioPath(
+                name="Bear case: incumbent restores stability and stalls transition",
+                branch_type="downside",
+                probability=reversal_probability,
+                confidence_band=self._confidence_band(reversal_probability),
+                trigger_signals=[
+                    "Policy, procurement, or pricing terms blunt portability incentives.",
+                    "Follow-up clusters narrow rather than broaden.",
+                ],
+                expected_moves=[
+                    f"{incumbent} restores platform control and narrative legitimacy.",
+                    "Challenger adoption slows outside early adopters.",
+                ],
+                market_effects=["Recent relative winners mean-revert; crowded thematic trades unwind."],
+                timeframe="2-10 weeks",
+            ),
+        ]
+        return self._normalize_scenario_probabilities(branches)
+
+    def _normalize_scenario_probabilities(self, branches: list[ScenarioPath]) -> list[ScenarioPath]:
+        total = sum(item.probability for item in branches)
+        if total <= 0:
+            return branches
+        normalized = [item.model_copy(update={"probability": item.probability / total}) for item in branches]
+        return sorted(normalized, key=lambda item: item.probability, reverse=True)
+
+    def _stage_transition_warnings(
+        self,
+        *,
+        snapshot: SituationSnapshot,
+        cluster: EventCluster,
+        priors: list[str],
+    ) -> list[StageTransitionWarning]:
+        warnings: list[StageTransitionWarning] = []
+        next_stage = self._next_stage(snapshot.stage.stage)
+        if next_stage:
+            warnings.append(
+                StageTransitionWarning(
+                    from_stage=snapshot.stage.stage,
+                    to_stage=next_stage,
+                    trigger="Cross-source agreement and narrative convergence continue broadening.",
+                    lead_time=self._lead_time(snapshot.stage.stage),
+                    probability=min(0.9, 0.4 + cluster.agreement_score * 0.25 + cluster.novelty_score * 0.2),
+                    rationale="When agreement broadens while novelty remains elevated, stage progression accelerates.",
+                    evidence_refs=priors[:2],
+                )
+            )
+        if snapshot.stage.stage in {"open_contestation", "repricing"}:
+            warnings.append(
+                StageTransitionWarning(
+                    from_stage=snapshot.stage.stage,
+                    to_stage="exhaustion_or_reversal",
+                    trigger="Incumbent response restores execution capacity faster than challengers can scale.",
+                    lead_time="2-10 weeks",
+                    probability=min(0.78, 0.22 + (1.0 - cluster.novelty_score) * 0.32 + cluster.cluster_strength * 0.2),
+                    rationale="Late-stage contests often reverse if response capacity recovers before narrative lock-in.",
+                    evidence_refs=priors[1:3],
+                )
+            )
+        return warnings
+
+    def _next_stage(self, stage: str) -> str | None:
+        if stage not in STAGE_SEQUENCE:
+            return None
+        index = STAGE_SEQUENCE.index(stage)
+        if index >= len(STAGE_SEQUENCE) - 1:
+            return None
+        return STAGE_SEQUENCE[index + 1]
+
+    def _lead_time(self, stage: str) -> str:
+        if stage in {"signal_emergence", "pattern_formation"}:
+            return "1-6 weeks"
+        if stage in {"strategic_positioning", "open_contestation"}:
+            return "days to 4 weeks"
+        if stage == "repricing":
+            return "days to 2 weeks"
+        return "2-8 weeks"
+
+    def _apply_scenario_calibration(
+        self,
+        path: ScenarioPath,
+        calibration: CalibrationSignal | None,
+    ) -> ScenarioPath:
+        if calibration is None or calibration.sample_size == 0:
+            return path.model_copy(update={"confidence_band": self._confidence_band(path.probability)})
+        adjustment = (calibration.confirmed_rate - calibration.unconfirmed_rate) * 0.05
+        probability = max(0.05, min(0.9, path.probability + adjustment))
+        return path.model_copy(
+            update={"probability": probability, "confidence_band": self._confidence_band(probability)}
+        )
+
+    def _apply_warning_calibration(
+        self,
+        warning: StageTransitionWarning,
+        calibration: CalibrationSignal | None,
+    ) -> StageTransitionWarning:
+        if calibration is None or calibration.sample_size == 0:
+            return warning
+        adjustment = (calibration.confirmed_rate - calibration.unconfirmed_rate) * 0.08
+        probability = max(0.05, min(0.95, warning.probability + adjustment))
+        return warning.model_copy(update={"probability": probability})
+
+    def _confidence_band(self, confidence: float) -> str:
+        if confidence >= HIGH_CONFIDENCE_MIN:
+            return "high_confidence"
+        if confidence >= ASYMMETRY_CONFIDENCE_MIN:
+            return "asymmetric"
+        return "speculative"
 
     def _affected_assets(self, cluster: EventCluster) -> list[str]:
         tags = set(cluster.tags)
@@ -488,10 +696,12 @@ class ActionEngine:
         calibration_signals: list[CalibrationSignal] | None = None,
         portfolio_positions: list[PortfolioPosition] | None = None,
         watchlist: list[WatchlistEntry] | None = None,
+        stage_transition_warnings: list[StageTransitionWarning] | None = None,
     ) -> tuple[list[ActionRecommendation], list[ActionRecommendation], list[str]]:
         calibration_index = _calibration_by_type(calibration_signals)
         portfolio_positions = portfolio_positions or []
         watchlist = watchlist or []
+        stage_transition_warnings = stage_transition_warnings or []
         actions: list[ActionRecommendation] = []
         exits: list[ActionRecommendation] = []
         endangered_symbols: list[str] = []
@@ -550,6 +760,9 @@ class ActionEngine:
         watchlist_actions = self._watchlist_actions(watchlist, implications, calibration_index)
         actions.extend(watchlist_actions)
         exits.extend([item for item in watchlist_actions if item.action in {"avoid", "trim", "exit"}])
+        warning_actions, warning_exits = self._warning_actions(snapshot, stage_transition_warnings)
+        actions.extend(warning_actions)
+        exits.extend(warning_exits)
         endangered_symbols.extend(self._endangered_symbols(portfolio_positions, implications, calibration_index))
         return actions, exits, sorted(set(endangered_symbols))
 
@@ -669,3 +882,39 @@ class ActionEngine:
         if default_generic and any(token in hay for token in {"incumbent", "exposed", "beneficiaries", "enablers"}):
             return True
         return False
+
+    def _warning_actions(
+        self,
+        snapshot: SituationSnapshot,
+        warnings: list[StageTransitionWarning],
+    ) -> tuple[list[ActionRecommendation], list[ActionRecommendation]]:
+        actions: list[ActionRecommendation] = []
+        exits: list[ActionRecommendation] = []
+        for warning in warnings:
+            if warning.probability < 0.6:
+                continue
+            action = "trim" if warning.probability >= 0.72 else "watch"
+            recommendation = ActionRecommendation(
+                action=action,
+                target=snapshot.system_under_pressure,
+                rationale=(
+                    f"Stage-transition risk {warning.from_stage}->{warning.to_stage} in {warning.lead_time}. "
+                    f"Trigger: {warning.trigger}"
+                ),
+                confidence=warning.probability,
+                urgency="high" if warning.probability >= 0.72 else "medium",
+                thesis_type="stage_transition_warning",
+            )
+            actions.append(recommendation)
+            if action == "trim":
+                exits.append(
+                    ActionRecommendation(
+                        action="trim",
+                        target=snapshot.system_under_pressure,
+                        rationale=f"Reduce gross exposure before {warning.to_stage} risk fully prices in.",
+                        confidence=max(0.35, warning.probability - 0.05),
+                        urgency="high",
+                        thesis_type="stage_transition_warning",
+                    )
+                )
+        return actions, exits

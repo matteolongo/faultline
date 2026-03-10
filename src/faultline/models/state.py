@@ -16,8 +16,10 @@ from faultline.models.contracts import (
     ProviderHealthStatus,
     RawSignal,
     RelatedSituation,
+    ScenarioPath,
     SignalEvent,
     SituationSnapshot,
+    StageTransitionWarning,
     WatchlistEntry,
 )
 
@@ -46,6 +48,8 @@ class FaultlineState(TypedDict, total=False):
     calibration_signals: list[CalibrationSignal]
     situation_snapshot: SituationSnapshot | None
     predictions: list[Prediction]
+    scenario_tree: list[ScenarioPath]
+    stage_transition_warnings: list[StageTransitionWarning]
     market_implications: list[MarketImplication]
     action_recommendations: list[ActionRecommendation]
     exit_signals: list[ActionRecommendation]

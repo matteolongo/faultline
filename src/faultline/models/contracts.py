@@ -215,6 +215,8 @@ class Prediction(BaseModel):
     related_actors: list[str] = Field(default_factory=list)
     affected_assets: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    confidence_band: str = "medium"
+    prior_evidence: list[str] = Field(default_factory=list)
     status: str = "pending"
 
     @model_validator(mode="after")
@@ -235,11 +237,23 @@ class Prediction(BaseModel):
 
 class ScenarioPath(BaseModel):
     name: str
+    branch_type: str = "base_case"
     probability: float = Field(default=0.5, ge=0.0, le=1.0)
+    confidence_band: str = "medium"
     trigger_signals: list[str] = Field(default_factory=list)
     expected_moves: list[str] = Field(default_factory=list)
     market_effects: list[str] = Field(default_factory=list)
     timeframe: str = "near-term"
+
+
+class StageTransitionWarning(BaseModel):
+    from_stage: str
+    to_stage: str
+    trigger: str
+    lead_time: str
+    probability: float = Field(default=0.5, ge=0.0, le=1.0)
+    rationale: str
+    evidence_refs: list[str] = Field(default_factory=list)
 
 
 class MarketImplication(BaseModel):
@@ -428,6 +442,9 @@ class FinalReport(BaseModel):
     system_map: list[str] = Field(default_factory=list)
     mechanism_map: list[str] = Field(default_factory=list)
     scenario_map: list[str] = Field(default_factory=list)
+    scenario_tree: list[str] = Field(default_factory=list)
+    stage_transition_warnings: list[str] = Field(default_factory=list)
+    prediction_priors: list[str] = Field(default_factory=list)
     market_implications: list[str] = Field(default_factory=list)
     actions_now: list[str] = Field(default_factory=list)
     exit_signals: list[str] = Field(default_factory=list)
