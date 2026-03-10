@@ -51,15 +51,7 @@ TECH_OPEN_TAGS = {"open-source", "protocol", "portability", "plugin-ecosystem", 
 FINANCIAL_STRESS_TAGS = {"debt", "refinancing", "spread-widening", "market-stress", "cloud-spend"}
 ASYMMETRY_CONFIDENCE_MIN = 0.58
 HIGH_CONFIDENCE_MIN = 0.74
-STAGE_SEQUENCE = [
-    "latent_tension",
-    "signal_emergence",
-    "pattern_formation",
-    "strategic_positioning",
-    "open_contestation",
-    "repricing",
-    "exhaustion_or_reversal",
-]
+STAGE_SEQUENCE = [stage["id"] for stage in load_stages()["stages"]]
 
 
 def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) -> dict[str, CalibrationSignal]:
@@ -342,11 +334,12 @@ class PredictionEngine:
         challenger = snapshot.key_actors[1].name if len(snapshot.key_actors) > 1 else snapshot.system_under_pressure
         priors = self._prediction_priors(snapshot, cluster)
         affected_assets = self._affected_assets(cluster)
+        mechanism_descriptor = snapshot.mechanisms[0].name if snapshot.mechanisms else snapshot.system_under_pressure
         predictions = [
             Prediction(
                 prediction_type="actor_move",
                 description=f"{incumbent} will respond by tightening control or repricing the defended surface.",
-                rationale=f"{snapshot.stage.stage} stage plus {snapshot.mechanisms[0].name} favors defensive repositioning.",
+                rationale=f"{snapshot.stage.stage} stage plus {mechanism_descriptor} favors defensive repositioning.",
                 time_horizon="1-4 weeks",
                 related_actors=[incumbent, challenger],
                 confidence=min(0.92, snapshot.confidence * 0.9),
@@ -429,8 +422,11 @@ class PredictionEngine:
         priors = [
             f"{cluster.agreement_score:.0%} cross-source agreement in current cluster.",
             f"{cluster.cluster_strength:.0%} cluster strength across {len(cluster.source_families)} source families.",
-            f"{snapshot.stage.stage} stage with mechanism {snapshot.mechanisms[0].name}.",
         ]
+        if snapshot.mechanisms:
+            priors.append(f"{snapshot.stage.stage} stage with mechanism {snapshot.mechanisms[0].name}.")
+        else:
+            priors.append(f"{snapshot.stage.stage} stage (no dominant mechanism identified yet).")
         if snapshot.evidence:
             priors.append(f"Lead evidence: {snapshot.evidence[0].title}.")
         return priors
@@ -528,7 +524,9 @@ class PredictionEngine:
                     evidence_refs=priors[:2],
                 )
             )
-        if snapshot.stage.stage in {"open_contestation", "repricing"}:
+        # Skip this warning if the standard next-stage progression already targets exhaustion_or_reversal
+        # (i.e., for the repricing stage), to avoid emitting duplicate (from_stage, to_stage) warnings.
+        if snapshot.stage.stage in {"open_contestation", "repricing"} and next_stage != "exhaustion_or_reversal":
             warnings.append(
                 StageTransitionWarning(
                     from_stage=snapshot.stage.stage,
