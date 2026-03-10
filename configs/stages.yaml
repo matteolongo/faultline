@@ -1,0 +1,37 @@
+version: 1
+stages:
+  - id: latent_tension
+    indicators:
+      - early friction without broad confirmation
+      - mostly isolated signals
+
+  - id: signal_emergence
+    indicators:
+      - multiple signals point to the same pressure
+      - weak but growing cross-source agreement
+
+  - id: pattern_formation
+    indicators:
+      - recurring mechanism appears across sources
+      - actor incentives become clearer
+
+  - id: strategic_positioning
+    indicators:
+      - actors prepare responses without open confrontation
+      - customers, allies, or intermediaries hedge their exposure
+
+  - id: open_contestation
+    indicators:
+      - direct confrontation, public counters, or forced responses
+      - rapid narrative conflict
+
+  - id: repricing
+    indicators:
+      - capital, adoption, or valuation moves follow the structural shift
+      - markets or budgets adjust materially
+
+  - id: exhaustion_or_reversal
+    indicators:
+      - escalation stalls
+      - countermeasures stabilize the system
+      - prior beneficiaries stop gaining

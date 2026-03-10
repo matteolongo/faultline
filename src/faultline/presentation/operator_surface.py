@@ -21,15 +21,17 @@ def summarize_final_state(final_state: dict[str, Any]) -> dict[str, Any]:
     diagnostics = final_state.get("diagnostics") or {}
     return {
         "publication_status": report.get("publication_status"),
+        "headline": report.get("headline"),
         "executive_summary": report.get("executive_summary"),
         "monitor_only_reason": report.get("monitor_only_reason"),
         "system_topology": report.get("system_topology"),
-        "opportunity_count": len(report.get("opportunity_map") or []),
+        "stage": report.get("stage"),
+        "opportunity_count": len(report.get("market_implications") or report.get("opportunity_map") or []),
         "cluster_id": cluster.get("cluster_id"),
         "cluster_title": cluster.get("canonical_title"),
         "cluster_strength": cluster.get("cluster_strength"),
         "agreement_score": cluster.get("agreement_score"),
-        "fragility_score": diagnostics.get("fragility_score"),
+        "stage_diagnostic": diagnostics.get("stage"),
         "publish_decision": diagnostics.get("publish_decision"),
         "source_counts": diagnostics.get("source_counts", {}),
     }

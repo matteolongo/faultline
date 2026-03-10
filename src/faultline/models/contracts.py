@@ -109,6 +109,174 @@ class HistoricalAnalog(BaseModel):
     why_relevant: str
 
 
+class Archetype(BaseModel):
+    id: str
+    name: str
+    empire_type: str
+    disruptor_type: str
+    asymmetry_type: str
+    trigger_tags: list[str] = Field(default_factory=list)
+    cheap_weapon_examples: list[str] = Field(default_factory=list)
+    analog_refs: list[str] = Field(default_factory=list)
+
+
+class FragilityPattern(BaseModel):
+    name: str
+    description: str
+    trigger_tags: list[str] = Field(default_factory=list)
+
+
+class EventCluster(BaseModel):
+    cluster_id: str
+    story_key: str
+    canonical_title: str
+    summary: str
+    region: str
+    language: str | None = None
+    entities: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    source_families: list[str] = Field(default_factory=list)
+    signal_ids: list[str] = Field(default_factory=list)
+    first_seen_at: datetime
+    last_seen_at: datetime
+    novelty_score: float = Field(ge=0.0, le=1.0)
+    agreement_score: float = Field(ge=0.0, le=1.0)
+    cluster_strength: float = Field(ge=0.0, le=1.0)
+
+
+class Actor(BaseModel):
+    name: str
+    actor_type: str = "organization"
+    role: str = "participant"
+    objectives: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    resources: list[str] = Field(default_factory=list)
+    alliances: list[str] = Field(default_factory=list)
+    narrative_position: str | None = None
+    adaptability: float = Field(default=0.5, ge=0.0, le=1.0)
+    influence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class Force(BaseModel):
+    force_type: str
+    description: str
+    strength: float = Field(ge=0.0, le=1.0)
+    directional_bias: str = "mixed"
+
+
+class Relation(BaseModel):
+    relation_type: str
+    source_actor: str
+    target_actor: str
+    description: str
+    strength: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class Mechanism(BaseModel):
+    mechanism_id: str
+    name: str
+    status: str = "active"
+    explanation: str
+    evidence_refs: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class EvidenceItem(BaseModel):
+    signal_id: str
+    title: str
+    summary: str
+    source: str
+    source_url: str | None = None
+    rationale: str
+
+
+class StageAssessment(BaseModel):
+    stage: str
+    explanation: str
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class Prediction(BaseModel):
+    prediction_type: str
+    description: str
+    rationale: str
+    time_horizon: str
+    related_actors: list[str] = Field(default_factory=list)
+    affected_assets: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    status: str = "pending"
+
+
+class ScenarioPath(BaseModel):
+    name: str
+    probability: float = Field(default=0.5, ge=0.0, le=1.0)
+    trigger_signals: list[str] = Field(default_factory=list)
+    expected_moves: list[str] = Field(default_factory=list)
+    market_effects: list[str] = Field(default_factory=list)
+    timeframe: str = "near-term"
+
+
+class MarketImplication(BaseModel):
+    target: str
+    implication_type: str = "asset"
+    direction: str
+    thesis_type: str
+    rationale: str
+    time_horizon: str
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    references: list[str] = Field(default_factory=list)
+
+
+class ActionRecommendation(BaseModel):
+    action: str
+    target: str
+    rationale: str
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    urgency: str = "medium"
+    thesis_type: str | None = None
+
+
+class ExitSignal(BaseModel):
+    target: str
+    description: str
+    trigger_type: str
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class RelatedSituation(BaseModel):
+    situation_id: str
+    title: str
+    summary: str
+    matched_on: list[str] = Field(default_factory=list)
+    mechanisms: list[str] = Field(default_factory=list)
+    similarity_score: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class SituationSnapshot(BaseModel):
+    situation_id: str
+    title: str
+    summary: str
+    domain: str = "complex_system"
+    system_under_pressure: str
+    key_actors: list[Actor] = Field(default_factory=list)
+    forces: list[Force] = Field(default_factory=list)
+    relations: list[Relation] = Field(default_factory=list)
+    mechanisms: list[Mechanism] = Field(default_factory=list)
+    stage: StageAssessment
+    risks: list[str] = Field(default_factory=list)
+    evidence: list[EvidenceItem] = Field(default_factory=list)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class OutcomeRecord(BaseModel):
+    prediction_type: str
+    target: str
+    outcome_status: str
+    explanation: str
+    confidence_delta: float = Field(default=0.0, ge=-1.0, le=1.0)
+    supporting_signal_ids: list[str] = Field(default_factory=list)
+
+
 class AbstractPattern(BaseModel):
     pattern_name: str
     empire_type: str
@@ -186,25 +354,9 @@ class ReviewedOpportunity(BaseModel):
     risk_notes: list[str] = Field(default_factory=list)
 
 
-class FinalReport(BaseModel):
-    publication_status: str = "publish"
-    executive_summary: str
-    system_topology: str
-    fragility_map: list[str] = Field(default_factory=list)
-    ripple_map: list[str] = Field(default_factory=list)
-    opportunity_map: list[str] = Field(default_factory=list)
-    execution_recommendations: list[str] = Field(default_factory=list)
-    open_questions: list[str] = Field(default_factory=list)
-    invalidation_signals: list[str] = Field(default_factory=list)
-    provenance: list[str] = Field(default_factory=list)
-    monitor_only_reason: str | None = None
-    detected_scenario: "ScenarioDetection | None" = None
-    equity_opportunities: "list[EquityOpportunity]" = Field(default_factory=list)
-
-
 class ScenarioDetection(BaseModel):
     scenario_name: str
-    scenario_type: str  # geopolitical_conflict | trade_war | energy_crisis | monetary_policy | social_unrest | other
+    scenario_type: str
     key_actors: list[str] = Field(default_factory=list)
     geographic_scope: list[str] = Field(default_factory=list)
     consequence_chain: list[str] = Field(default_factory=list)
@@ -214,46 +366,42 @@ class ScenarioDetection(BaseModel):
 class EquityOpportunity(BaseModel):
     symbol: str
     company_name: str
-    direction: str  # "long" | "short" | "watch"
+    direction: str
     rationale: str
     scenario_link: str
     confidence: float = Field(ge=0.0, le=1.0, default=0.5)
     search_summary: str | None = None
 
 
-class Archetype(BaseModel):
-    id: str
-    name: str
-    empire_type: str
-    disruptor_type: str
-    asymmetry_type: str
-    trigger_tags: list[str] = Field(default_factory=list)
-    cheap_weapon_examples: list[str] = Field(default_factory=list)
-    analog_refs: list[str] = Field(default_factory=list)
+class FinalReport(BaseModel):
+    publication_status: str = "publish"
+    headline: str = ""
+    executive_summary: str
+    why_now: str = ""
+    system_topology: str = ""
+    situation: str = ""
+    stage: str = ""
+    system_map: list[str] = Field(default_factory=list)
+    mechanism_map: list[str] = Field(default_factory=list)
+    scenario_map: list[str] = Field(default_factory=list)
+    market_implications: list[str] = Field(default_factory=list)
+    actions_now: list[str] = Field(default_factory=list)
+    exit_signals: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    open_questions: list[str] = Field(default_factory=list)
+    invalidation_signals: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+    references: list[str] = Field(default_factory=list)
+    provenance: list[str] = Field(default_factory=list)
+    monitor_only_reason: str | None = None
+    detected_scenario: ScenarioDetection | None = None
+    equity_opportunities: list[EquityOpportunity] = Field(default_factory=list)
 
-
-class FragilityPattern(BaseModel):
-    name: str
-    description: str
-    trigger_tags: list[str] = Field(default_factory=list)
-
-
-class EventCluster(BaseModel):
-    cluster_id: str
-    story_key: str
-    canonical_title: str
-    summary: str
-    region: str
-    language: str | None = None
-    entities: list[str] = Field(default_factory=list)
-    tags: list[str] = Field(default_factory=list)
-    source_families: list[str] = Field(default_factory=list)
-    signal_ids: list[str] = Field(default_factory=list)
-    first_seen_at: datetime
-    last_seen_at: datetime
-    novelty_score: float = Field(ge=0.0, le=1.0)
-    agreement_score: float = Field(ge=0.0, le=1.0)
-    cluster_strength: float = Field(ge=0.0, le=1.0)
+    # Legacy fields retained temporarily while old modules are phased out.
+    fragility_map: list[str] = Field(default_factory=list)
+    ripple_map: list[str] = Field(default_factory=list)
+    opportunity_map: list[str] = Field(default_factory=list)
+    execution_recommendations: list[str] = Field(default_factory=list)
 
 
 class PublishedReport(BaseModel):
