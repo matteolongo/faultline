@@ -27,8 +27,6 @@ class FaultlineInputSchema(TypedDict, total=False):
     run_mode: str
     window_start: str
     window_end: str
-    portfolio_positions: list[PortfolioPosition]
-    watchlist: list[WatchlistEntry]
 
 
 class FaultlineState(TypedDict, total=False):
