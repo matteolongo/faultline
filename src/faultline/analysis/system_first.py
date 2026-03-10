@@ -47,6 +47,10 @@ TECH_OPEN_TAGS = {"open-source", "protocol", "portability", "plugin-ecosystem", 
 FINANCIAL_STRESS_TAGS = {"debt", "refinancing", "spread-widening", "market-stress", "cloud-spend"}
 
 
+def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) -> dict[str, CalibrationSignal]:
+    return {item.prediction_type: item for item in (calibration_signals or [])}
+
+
 class MechanismAnalyzer:
     def __init__(self) -> None:
         self.config = load_mechanisms()["mechanisms"]
@@ -318,7 +322,7 @@ class PredictionEngine:
         cluster: EventCluster,
         calibration_signals: list[CalibrationSignal] | None = None,
     ) -> list[Prediction]:
-        calibration_index = {item.prediction_type: item for item in (calibration_signals or [])}
+        calibration_index = _calibration_by_type(calibration_signals)
         incumbent = snapshot.key_actors[0].name if snapshot.key_actors else cluster.region
         challenger = snapshot.key_actors[1].name if len(snapshot.key_actors) > 1 else snapshot.system_under_pressure
         predictions = [
@@ -389,11 +393,16 @@ class PredictionEngine:
 
 class MarketMapper:
     def map(
-        self, snapshot: SituationSnapshot, predictions: list[Prediction], cluster: EventCluster
+        self,
+        snapshot: SituationSnapshot,
+        predictions: list[Prediction],
+        cluster: EventCluster,
+        calibration_signals: list[CalibrationSignal] | None = None,
     ) -> list[MarketImplication]:
+        calibration_index = _calibration_by_type(calibration_signals)
         tags = set(cluster.tags)
         if tags.intersection(TECH_OPEN_TAGS):
-            return [
+            implications = [
                 MarketImplication(
                     target="Open ecosystem enablers",
                     direction="positive",
@@ -413,8 +422,8 @@ class MarketMapper:
                     references=[item.title for item in snapshot.evidence[:2]],
                 ),
             ]
-        if "undersea" in tags or "chokepoint" in tags:
-            return [
+        elif "undersea" in tags or "chokepoint" in tags:
+            implications = [
                 MarketImplication(
                     target="Alternative routing and monitoring plays",
                     direction="positive",
@@ -425,17 +434,47 @@ class MarketMapper:
                     references=[item.title for item in snapshot.evidence[:2]],
                 )
             ]
-        return [
-            MarketImplication(
-                target="Exposed incumbents",
-                direction="negative",
-                thesis_type="high_confidence_opportunity",
-                rationale="The current mechanism points to pressured execution capacity and weaker platform position.",
-                time_horizon="2-6 weeks",
-                confidence=0.61,
-                references=[item.title for item in snapshot.evidence[:2]],
+        else:
+            implications = [
+                MarketImplication(
+                    target="Exposed incumbents",
+                    direction="negative",
+                    thesis_type="high_confidence_opportunity",
+                    rationale="The current mechanism points to pressured execution capacity and weaker platform position.",
+                    time_horizon="2-6 weeks",
+                    confidence=0.61,
+                    references=[item.title for item in snapshot.evidence[:2]],
+                )
+            ]
+        return [self._apply_calibration(item, calibration_index) for item in implications]
+
+    def _apply_calibration(
+        self,
+        implication: MarketImplication,
+        calibration_index: dict[str, CalibrationSignal],
+    ) -> MarketImplication:
+        relevant_types = ["asset_repricing"]
+        if implication.thesis_type == "high_confidence_opportunity":
+            relevant_types.append("actor_move")
+        deltas = []
+        guidance = []
+        for prediction_type in relevant_types:
+            signal = calibration_index.get(prediction_type)
+            if signal is None or signal.sample_size == 0:
+                continue
+            deltas.append(
+                (signal.confirmed_rate - signal.unconfirmed_rate) * 0.08 + signal.average_confidence_delta * 0.3
             )
-        ]
+            guidance.append(signal.guidance)
+        if not deltas:
+            return implication
+        adjusted_confidence = max(0.05, min(0.95, implication.confidence + (sum(deltas) / len(deltas))))
+        return implication.model_copy(
+            update={
+                "confidence": adjusted_confidence,
+                "rationale": f"{implication.rationale} Calibration: {' '.join(guidance[:2])}",
+            }
+        )
 
 
 class ActionEngine:
@@ -444,30 +483,35 @@ class ActionEngine:
         snapshot: SituationSnapshot,
         implications: list[MarketImplication],
         predictions: list[Prediction],
+        calibration_signals: list[CalibrationSignal] | None = None,
     ) -> tuple[list[ActionRecommendation], list[ActionRecommendation]]:
+        calibration_index = _calibration_by_type(calibration_signals)
         actions: list[ActionRecommendation] = []
         exits: list[ActionRecommendation] = []
         for implication in implications:
+            conviction = self._conviction_for(implication, calibration_index)
             if implication.thesis_type == "asymmetric_opportunity":
                 actions.append(
                     ActionRecommendation(
-                        action="watch" if implication.confidence < 0.7 else "enter",
+                        action="watch" if conviction < 0.72 else "enter",
                         target=implication.target,
-                        rationale=implication.rationale,
-                        confidence=implication.confidence,
-                        urgency="medium",
+                        rationale=f"{implication.rationale} Calibrated conviction={conviction:.2f}.",
+                        confidence=conviction,
+                        urgency="medium" if conviction < 0.8 else "high",
                         thesis_type=implication.thesis_type,
                     )
                 )
             else:
-                action = "avoid" if implication.direction == "negative" else "enter"
+                action = "avoid" if implication.direction == "negative" and conviction < 0.68 else "enter"
+                if implication.direction == "negative" and conviction < 0.6:
+                    action = "watch"
                 actions.append(
                     ActionRecommendation(
                         action=action,
                         target=implication.target,
-                        rationale=implication.rationale,
-                        confidence=implication.confidence,
-                        urgency="high" if implication.confidence >= 0.72 else "medium",
+                        rationale=f"{implication.rationale} Calibrated conviction={conviction:.2f}.",
+                        confidence=conviction,
+                        urgency="high" if conviction >= 0.72 else "medium",
                         thesis_type=implication.thesis_type,
                     )
                 )
@@ -479,7 +523,7 @@ class ActionEngine:
                         "Leave or reduce exposure if the incumbent response restores stability "
                         "or if follow-up signals fail to confirm the mechanism."
                     ),
-                    confidence=max(0.5, implication.confidence - 0.05),
+                    confidence=max(0.35, conviction - 0.08),
                     urgency="medium",
                     thesis_type=implication.thesis_type,
                 )
@@ -494,3 +538,15 @@ class ActionEngine:
                 )
             )
         return actions, exits
+
+    def _conviction_for(
+        self,
+        implication: MarketImplication,
+        calibration_index: dict[str, CalibrationSignal],
+    ) -> float:
+        relevant_type = "asset_repricing"
+        signal = calibration_index.get(relevant_type)
+        if signal is None or signal.sample_size == 0:
+            return implication.confidence
+        adjustment = (signal.confirmed_rate - signal.unconfirmed_rate) * 0.1 + signal.average_confidence_delta * 0.35
+        return max(0.05, min(0.95, implication.confidence + adjustment))

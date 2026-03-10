@@ -68,6 +68,11 @@ class ReportBuilder:
             f"{item.prediction_type}: {item.guidance} sample={item.sample_size} confirmed={item.confirmed_rate:.0%}"
             for item in calibration_signals
         ]
+        calibrated_conviction = (
+            sum(item.confidence for item in actions) / len(actions)
+            if actions
+            else (sum(item.confidence for item in predictions) / len(predictions) if predictions else 0.0)
+        )
 
         return FinalReport(
             publication_status=publication_status,
@@ -80,6 +85,7 @@ class ReportBuilder:
                 f"The situation is in {snapshot.stage.stage} and already shows "
                 f"{cluster.agreement_score:.0%} cross-source agreement."
             ),
+            calibrated_conviction=calibrated_conviction,
             system_topology=snapshot.system_under_pressure,
             situation=snapshot.summary,
             stage=snapshot.stage.stage,
@@ -135,6 +141,9 @@ def render_markdown(report: FinalReport) -> str:
         "",
         "## Publication Status",
         report.publication_status,
+        "",
+        "## Calibrated Conviction",
+        f"{report.calibrated_conviction:.0%}",
         "",
         "## Stage",
         report.stage or "unknown",

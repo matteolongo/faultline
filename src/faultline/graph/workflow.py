@@ -226,7 +226,12 @@ class StrategicSwarmWorkflow:
                 "market_implications": [],
                 "provenance": [*state.get("provenance", []), "Market mapping skipped."],
             }
-        implications = self.market_mapper.map(snapshot, state.get("predictions", []), cluster)
+        implications = self.market_mapper.map(
+            snapshot,
+            state.get("predictions", []),
+            cluster,
+            state.get("calibration_signals", []),
+        )
         return {
             "market_implications": implications,
             "provenance": [*state.get("provenance", []), f"Mapped {len(implications)} market implications."],
@@ -244,6 +249,7 @@ class StrategicSwarmWorkflow:
             snapshot,
             state.get("market_implications", []),
             state.get("predictions", []),
+            state.get("calibration_signals", []),
         )
         return {
             "action_recommendations": actions,

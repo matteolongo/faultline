@@ -26,6 +26,7 @@ def summarize_final_state(final_state: dict[str, Any]) -> dict[str, Any]:
         "monitor_only_reason": report.get("monitor_only_reason"),
         "system_topology": report.get("system_topology"),
         "stage": report.get("stage"),
+        "calibrated_conviction": report.get("calibrated_conviction"),
         "opportunity_count": len(report.get("market_implications") or report.get("opportunity_map") or []),
         "cluster_id": cluster.get("cluster_id"),
         "cluster_title": cluster.get("canonical_title"),

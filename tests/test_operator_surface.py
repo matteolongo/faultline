@@ -24,6 +24,7 @@ def test_operator_surface_summarizes_demo_run(tmp_path) -> None:
     assert summary["run_dir"]
     assert summary["publication_status"] in {"publish", "monitor_only"}
     assert summary["cluster_id"]
+    assert "calibrated_conviction" in summary
     assert payload["report_json"]
     assert payload["report_markdown"]
 
