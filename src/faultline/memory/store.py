@@ -33,6 +33,10 @@ class SituationMemory:
         self.namespace = ("situations",)
         self.store = InMemoryStore(index={"dims": dims, "embed": HashingEmbedder(dims), "fields": ["text"]})
 
+    def bootstrap(self, snapshots: list[SituationSnapshot]) -> None:
+        for snapshot in snapshots:
+            self.remember(snapshot)
+
     def remember(self, snapshot: SituationSnapshot) -> None:
         mechanisms = ", ".join(item.name for item in snapshot.mechanisms)
         actors = ", ".join(item.name for item in snapshot.key_actors)

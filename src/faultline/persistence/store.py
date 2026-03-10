@@ -19,6 +19,7 @@ from faultline.models import (
     PublishedReport,
     RawSignal,
     SignalEvent,
+    SituationSnapshot,
 )
 from faultline.utils.io import ensure_directory, serialize_model
 
@@ -157,6 +158,16 @@ class SignalStore:
                 published_at TEXT NOT NULL,
                 report_json TEXT NOT NULL,
                 diagnostics_json TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS situation_snapshots (
+                situation_id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                domain TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                payload_json TEXT NOT NULL
             )
             """,
             """
@@ -540,6 +551,44 @@ class SignalStore:
                     json.dumps(serialize_model(report.diagnostics)),
                 ),
             )
+
+    def save_situation_snapshot(self, snapshot: SituationSnapshot) -> None:
+        sql = """
+            INSERT OR REPLACE INTO situation_snapshots (
+                situation_id, title, domain, stage, confidence, payload_json
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        """
+        if self.scheme.startswith("postgres"):
+            sql = """
+                INSERT INTO situation_snapshots (
+                    situation_id, title, domain, stage, confidence, payload_json
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (situation_id) DO UPDATE SET payload_json = EXCLUDED.payload_json
+            """
+        with self.connection() as connection:
+            connection.cursor().execute(
+                sql,
+                (
+                    snapshot.situation_id,
+                    snapshot.title,
+                    snapshot.domain,
+                    snapshot.stage.stage,
+                    snapshot.confidence,
+                    json.dumps(serialize_model(snapshot)),
+                ),
+            )
+
+    def load_situation_snapshots(self, *, limit: int | None = None) -> list[SituationSnapshot]:
+        sql = "SELECT payload_json FROM situation_snapshots ORDER BY confidence DESC, title ASC"
+        params: list[Any] = []
+        if limit is not None:
+            sql += f" LIMIT {self._placeholder()}"
+            params.append(limit)
+        with self.connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+        return [SituationSnapshot.model_validate(json.loads(row[0])) for row in rows]
 
     def save_predictions(self, *, run_id: str, predictions: list[Prediction]) -> None:
         if not predictions:

@@ -61,6 +61,7 @@ class StrategicSwarmWorkflow:
         self.live_providers = live_providers or build_live_providers()
         self.normalizer = SignalNormalizer()
         self.memory = SituationMemory()
+        self.memory.bootstrap(self.store.load_situation_snapshots())
         self.mapper = SituationMapper()
         self.prediction_engine = PredictionEngine()
         self.market_mapper = MarketMapper()
@@ -266,4 +267,5 @@ class StrategicSwarmWorkflow:
         snapshot = state.get("situation_snapshot")
         if snapshot is not None:
             self.memory.remember(snapshot)
+            self.store.save_situation_snapshot(snapshot)
         return {}
