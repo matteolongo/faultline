@@ -13,6 +13,14 @@ from faultline.utils.config import load_prompts
 
 
 class RippleArchitect:
+    """Projects second-order cascade scenarios from fragility assessments.
+
+    For each high-fragility node, models the downstream effects: which sectors are
+    helped vs. hurt, what the timeline looks like, and which signals would confirm
+    or deny the cascade. Optionally uses LLM to reason about non-obvious second-order
+    effects beyond direct sector mapping heuristics.
+    """
+
     def __init__(self, reasoner: StructuredReasoner | None = None) -> None:
         self.reasoner = reasoner or StructuredReasoner()
         self.prompts = load_prompts()

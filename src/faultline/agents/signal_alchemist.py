@@ -11,6 +11,14 @@ from faultline.utils.config import load_prompts
 
 
 class SignalAlchemist:
+    """Converts structural patterns and event clusters into quantified signal bundles.
+
+    Takes the Empire–Disruptor topology output from PatternMatcher and translates
+    abstract structural observations into measurable signal vectors: direction, magnitude,
+    confidence, and relevant financial instruments. Optionally refines signal extraction
+    via LLM when an OpenAI key is available.
+    """
+
     def __init__(self, reasoner: StructuredReasoner | None = None) -> None:
         self.reasoner = reasoner or StructuredReasoner()
         self.prompts = load_prompts()

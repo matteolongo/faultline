@@ -12,6 +12,15 @@ DIRECT_THEME_KEYWORDS = {
 
 
 class OpportunityGenerator:
+    """Generates high-convexity equity opportunity ideas from ripple scenarios.
+
+    For each RippleScenario, produces structured EquityOpportunity ideas with
+    explicit thesis, direction (long/short), conviction score, time horizon,
+    and invalidation conditions. Ideas with weak conviction are flagged monitor_only
+    by the downstream ExecutionCritic. Does not use LLM — purely heuristic generation
+    from scenario structure.
+    """
+
     def generate(self, scenarios: list[RippleScenario], retry_count: int = 0) -> list[OpportunityIdea]:
         ideas: list[OpportunityIdea] = []
         for scenario in scenarios:

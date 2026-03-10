@@ -9,6 +9,16 @@ from faultline.utils.config import load_scoring_config
 
 
 class ExecutionCritic:
+    """Validates and stress-tests opportunity ideas before surfacing them in the report.
+
+    Applies two threshold gates from configs/scoring.yaml:
+    - weak_convexity: ideas with conviction below this are flagged monitor_only
+    - crowded_trade: ideas with saturation above this are deprioritized
+
+    Does not generate ideas — only filters and annotates them. All gating decisions
+    are logged in the idea's metadata for operator review.
+    """
+
     def __init__(self) -> None:
         scoring = load_scoring_config()
         self.weak_convexity = scoring["thresholds"]["weak_convexity"]

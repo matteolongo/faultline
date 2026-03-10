@@ -38,6 +38,14 @@ DISRUPTOR_KEYWORDS = {
 
 
 class PatternMatcher:
+    """Identifies structural conflict patterns in a cluster of signals.
+
+    Matches signals against known geopolitical archetypes (Empire vs. Disruptor
+    topologies defined in configs/archetypes.yaml), determines Empire/Disruptor
+    node assignments, and quantifies the asymmetry score. Optionally uses an LLM
+    via StructuredReasoner for deeper pattern extraction beyond keyword heuristics.
+    """
+
     def __init__(self, reasoner: StructuredReasoner | None = None) -> None:
         self.archetypes = load_archetypes()
         self.prompts = load_prompts()

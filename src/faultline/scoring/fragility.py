@@ -39,6 +39,16 @@ ANTIFRAGILE_TAGS = {
 
 
 class FragilityScorer:
+    """Computes weighted fragility scores for each structural node in a cluster.
+
+    Applies the six-factor fragility model defined in configs/scoring.yaml:
+    hubris_index, energy_defense_ratio, kinetic_ripple, centralization_score,
+    redundancy_penalty, and antifragility_attraction. Each factor is computed from
+    signal tags, archetype matching, and cluster metadata, then combined into a
+    composite 0–1 score. Nodes scoring above the high_fragility threshold are
+    eligible for ripple scenario projection and opportunity generation.
+    """
+
     def __init__(self) -> None:
         self.scoring = load_scoring_config()
         self.archetypes = load_archetypes()
