@@ -36,6 +36,7 @@ except Exception:  # pragma: no cover
         def compile(self) -> _CompiledGraph:
             return _CompiledGraph(self.nodes, self.edges)
 
+
 from faultline.analysis import ActionEngine, MarketMapper, PredictionEngine, SituationMapper
 from faultline.memory import SituationMemory
 from faultline.models import FaultlineState
@@ -137,7 +138,9 @@ class StrategicSwarmWorkflow:
         story_keys = [self.normalizer._story_key(signal) for signal in state["raw_signals"]]
         dedupe_hashes = [signal.dedupe_hash or signal.id for signal in state["raw_signals"]]
         known_hashes = (
-            self.store.get_seen_dedupe_hashes(dedupe_hashes) if state.get("run_mode") not in {"demo", "replay"} else set()
+            self.store.get_seen_dedupe_hashes(dedupe_hashes)
+            if state.get("run_mode") not in {"demo", "replay"}
+            else set()
         )
         prior_story_counts = self.store.get_story_counts(story_keys) if state.get("run_mode") != "demo" else {}
         events, clusters, diagnostics = self.normalizer.normalize(

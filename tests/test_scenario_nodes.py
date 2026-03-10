@@ -90,7 +90,9 @@ def test_retrieve_related_situations_returns_memory_hits(tmp_path) -> None:
     cluster = _make_cluster()
     state = _make_state(cluster)
 
-    previous_cluster = cluster.model_copy(update={"cluster_id": "prior-1", "canonical_title": "Earlier open stack stress"})
+    previous_cluster = cluster.model_copy(
+        update={"cluster_id": "prior-1", "canonical_title": "Earlier open stack stress"}
+    )
     previous_snapshot = wf.mapper.map(previous_cluster, state["normalized_events"], [])
     wf.memory.remember(previous_snapshot)
 

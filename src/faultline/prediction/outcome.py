@@ -96,7 +96,9 @@ class OutcomeEvaluator:
             [],
         )
 
-    def _score_asset_repricing(self, prediction: Prediction, signals: list[RawSignal]) -> tuple[str, str, float, list[str]]:
+    def _score_asset_repricing(
+        self, prediction: Prediction, signals: list[RawSignal]
+    ) -> tuple[str, str, float, list[str]]:
         text = prediction.description.lower()
         expected_positive = "outperform" in text or "positive" in text or "benefit" in text
         keyword_pool = POSITIVE_REPRICING_KEYWORDS if expected_positive else NEGATIVE_REPRICING_KEYWORDS
@@ -123,7 +125,9 @@ class OutcomeEvaluator:
             [],
         )
 
-    def _score_timing_window(self, prediction: Prediction, signals: list[RawSignal]) -> tuple[str, str, float, list[str]]:
+    def _score_timing_window(
+        self, prediction: Prediction, signals: list[RawSignal]
+    ) -> tuple[str, str, float, list[str]]:
         if not signals:
             return ("unconfirmed", "There is no follow-up evidence to assess timing yet.", -0.05, [])
         return (
@@ -136,7 +140,12 @@ class OutcomeEvaluator:
     def _score_generic(self, prediction: Prediction, signals: list[RawSignal]) -> tuple[str, str, float, list[str]]:
         matched = self._matching_signals(signals, prediction.related_actors + prediction.affected_assets, set())
         if matched:
-            return ("partial", "Related follow-up evidence exists, but the prediction type is generic.", 0.03, [signal.id for signal in matched[:3]])
+            return (
+                "partial",
+                "Related follow-up evidence exists, but the prediction type is generic.",
+                0.03,
+                [signal.id for signal in matched[:3]],
+            )
         return ("unconfirmed", "No usable follow-up evidence found for this prediction.", -0.05, [])
 
     def _matching_signals(
@@ -148,7 +157,9 @@ class OutcomeEvaluator:
         use_description: bool = False,
         asset_mode: bool = False,
     ) -> list[RawSignal]:
-        anchor_tokens = {token for anchor in anchors for token in re.findall(r"[a-z0-9]+", anchor.lower()) if len(token) > 2}
+        anchor_tokens = {
+            token for anchor in anchors for token in re.findall(r"[a-z0-9]+", anchor.lower()) if len(token) > 2
+        }
         matched: list[RawSignal] = []
         for signal in signals:
             haystack = " ".join(
@@ -161,7 +172,11 @@ class OutcomeEvaluator:
             )
             if use_description:
                 haystack = f"{haystack} {signal.signal_type.lower()}"
-            if asset_mode and signal.source not in {"market", "macro"} and signal.signal_type not in {"market", "market-quote"}:
+            if (
+                asset_mode
+                and signal.source not in {"market", "macro"}
+                and signal.signal_type not in {"market", "market-quote"}
+            ):
                 continue
             anchor_hit = not anchor_tokens or any(token in haystack for token in anchor_tokens)
             keyword_hit = not keywords or any(keyword in haystack for keyword in keywords)

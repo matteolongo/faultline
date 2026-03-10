@@ -147,7 +147,9 @@ class StrategicSwarmRunner:
         run_dir = self._resolve_run_dir(run_id)
         if run_dir is not None:
             write_json(run_dir / "outcomes.json", {"run_id": run_id, "summary": summary, "outcomes": outcomes})
-            write_text(run_dir / "outcomes.md", render_outcome_markdown(run_id=run_id, outcomes=outcomes, summary=summary))
+            write_text(
+                run_dir / "outcomes.md", render_outcome_markdown(run_id=run_id, outcomes=outcomes, summary=summary)
+            )
         return {
             "run_id": run_id,
             "followup_signal_count": len(signals),

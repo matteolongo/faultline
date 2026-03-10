@@ -40,7 +40,10 @@ class ReportBuilder:
 
         system_map = [
             f"System under pressure: {snapshot.system_under_pressure}",
-            *[f"{actor.role.title()}: {actor.name} | objectives: {', '.join(actor.objectives[:2])}" for actor in snapshot.key_actors],
+            *[
+                f"{actor.role.title()}: {actor.name} | objectives: {', '.join(actor.objectives[:2])}"
+                for actor in snapshot.key_actors
+            ],
             *[
                 f"{relation.relation_type.title()}: {relation.source_actor} -> {relation.target_actor}"
                 for relation in snapshot.relations
@@ -52,8 +55,7 @@ class ReportBuilder:
             for prediction in predictions
         ]
         market_lines = [
-            f"{item.target}: {item.direction} | {item.thesis_type} | {item.rationale}"
-            for item in implications
+            f"{item.target}: {item.direction} | {item.thesis_type} | {item.rationale}" for item in implications
         ]
         action_lines = [f"{item.action.upper()} {item.target}: {item.rationale}" for item in actions]
         exit_lines = [f"{item.action.upper()} {item.target}: {item.rationale}" for item in exits]

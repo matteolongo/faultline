@@ -263,7 +263,9 @@ class SituationMapper:
         explanation = "Signals are emerging but not yet broad enough to imply repricing."
         if "market-stress" in tags or "cloud-spend" in tags:
             stage = "repricing"
-            explanation = "Market-linked evidence suggests the structural tension is already affecting valuations or budgets."
+            explanation = (
+                "Market-linked evidence suggests the structural tension is already affecting valuations or budgets."
+            )
         elif cluster.agreement_score > 0.7 and len(mechanisms) >= 2:
             stage = "strategic_positioning"
             explanation = "Actors and counterparties are adjusting before a full open confrontation."
@@ -364,7 +366,9 @@ class PredictionEngine:
 
 
 class MarketMapper:
-    def map(self, snapshot: SituationSnapshot, predictions: list[Prediction], cluster: EventCluster) -> list[MarketImplication]:
+    def map(
+        self, snapshot: SituationSnapshot, predictions: list[Prediction], cluster: EventCluster
+    ) -> list[MarketImplication]:
         tags = set(cluster.tags)
         if tags.intersection(TECH_OPEN_TAGS):
             return [
