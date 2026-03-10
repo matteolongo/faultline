@@ -34,6 +34,7 @@ def summarize_final_state(final_state: dict[str, Any]) -> dict[str, Any]:
         "stage_diagnostic": diagnostics.get("stage"),
         "publish_decision": diagnostics.get("publish_decision"),
         "source_counts": diagnostics.get("source_counts", {}),
+        "calibration_note_count": len(report.get("calibration_notes") or []),
     }
 
 

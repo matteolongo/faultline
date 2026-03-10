@@ -74,6 +74,7 @@ class StrategicSwarmWorkflow:
         graph.add_node("ingest_signals", self.ingest_signals)
         graph.add_node("normalize_events", self.normalize_events)
         graph.add_node("retrieve_related_situations", self.retrieve_related_situations)
+        graph.add_node("retrieve_calibration", self.retrieve_calibration)
         graph.add_node("map_situation", self.map_situation)
         graph.add_node("generate_predictions", self.generate_predictions)
         graph.add_node("map_market_implications", self.map_market_implications)
@@ -84,7 +85,8 @@ class StrategicSwarmWorkflow:
         graph.add_edge(START, "ingest_signals")
         graph.add_edge("ingest_signals", "normalize_events")
         graph.add_edge("normalize_events", "retrieve_related_situations")
-        graph.add_edge("retrieve_related_situations", "map_situation")
+        graph.add_edge("retrieve_related_situations", "retrieve_calibration")
+        graph.add_edge("retrieve_calibration", "map_situation")
         graph.add_edge("map_situation", "generate_predictions")
         graph.add_edge("generate_predictions", "map_market_implications")
         graph.add_edge("map_market_implications", "generate_actions")
@@ -103,7 +105,7 @@ class StrategicSwarmWorkflow:
             return {
                 "raw_signals": raw,
                 "provenance": [f"Ingested {len(raw)} raw signals from sample providers for {scenario_id}."],
-                "diagnostics": {"source_counts": {"sample": len(raw)}},
+                "diagnostics": {**state.get("diagnostics", {}), "source_counts": {"sample": len(raw)}},
             }
 
         now = datetime.now(UTC)
@@ -131,7 +133,7 @@ class StrategicSwarmWorkflow:
         return {
             "raw_signals": raw,
             "provenance": [f"Ingested {len(raw)} raw signals from live providers."],
-            "diagnostics": {"source_counts": provider_counts},
+            "diagnostics": {**state.get("diagnostics", {}), "source_counts": provider_counts},
         }
 
     def normalize_events(self, state: FaultlineState) -> FaultlineState:
@@ -177,6 +179,17 @@ class StrategicSwarmWorkflow:
             "provenance": [*state.get("provenance", []), f"Retrieved {len(related)} related prior situations."],
         }
 
+    def retrieve_calibration(self, state: FaultlineState) -> FaultlineState:
+        run_id = state.get("diagnostics", {}).get("run_id")
+        calibration_signals = self.store.load_calibration_signals(exclude_run_id=run_id)
+        return {
+            "calibration_signals": calibration_signals,
+            "provenance": [
+                *state.get("provenance", []),
+                f"Loaded {len(calibration_signals)} calibration signals from prior outcomes.",
+            ],
+        }
+
     def map_situation(self, state: FaultlineState) -> FaultlineState:
         cluster = state.get("selected_cluster")
         if cluster is None:
@@ -199,7 +212,7 @@ class StrategicSwarmWorkflow:
         cluster = state.get("selected_cluster")
         if snapshot is None or cluster is None:
             return {"predictions": [], "provenance": [*state.get("provenance", []), "Prediction skipped."]}
-        predictions = self.prediction_engine.predict(snapshot, cluster)
+        predictions = self.prediction_engine.predict(snapshot, cluster, state.get("calibration_signals", []))
         return {
             "predictions": predictions,
             "provenance": [*state.get("provenance", []), f"Generated {len(predictions)} explicit predictions."],
@@ -251,6 +264,7 @@ class StrategicSwarmWorkflow:
             snapshot=snapshot,
             cluster=cluster,
             related_situations=state.get("related_situations", []),
+            calibration_signals=state.get("calibration_signals", []),
             predictions=state.get("predictions", []),
             implications=state.get("market_implications", []),
             actions=state.get("action_recommendations", []),
