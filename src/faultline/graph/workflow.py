@@ -269,6 +269,7 @@ class StrategicSwarmWorkflow:
             state.get("portfolio_positions", []),
             state.get("watchlist", []),
             state.get("stage_transition_warnings", []),
+            state.get("operator_policy_config"),
         )
         return {
             "action_recommendations": actions,

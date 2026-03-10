@@ -4,6 +4,7 @@ from faultline.models import (
     ActionRecommendation,
     FinalReport,
     MarketImplication,
+    OperatorPolicyConfig,
     Prediction,
     SignalEvent,
 )
@@ -82,3 +83,9 @@ def test_action_recommendation_accepts_watch_and_exit() -> None:
     exit_action = ActionRecommendation(action="exit", target="BBB", rationale="Thesis broke", confidence=0.8)
     assert watch.action == "watch"
     assert exit_action.action == "exit"
+
+
+def test_operator_policy_config_has_safe_defaults() -> None:
+    policy = OperatorPolicyConfig()
+    assert policy.portfolio_exit_threshold >= policy.portfolio_trim_threshold
+    assert policy.timing_exit_threshold >= policy.timing_trim_threshold

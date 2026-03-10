@@ -8,6 +8,7 @@ from uuid import uuid4
 from faultline.evaluation.rubric import evaluate_report
 from faultline.graph.workflow import StrategicSwarmWorkflow
 from faultline.models import (
+    OperatorPolicyConfig,
     OutcomeRecord,
     PortfolioPosition,
     Prediction,
@@ -52,6 +53,7 @@ class StrategicSwarmRunner:
         *,
         portfolio_positions: list[PortfolioPosition | dict] | None = None,
         watchlist: list[WatchlistEntry | dict] | None = None,
+        operator_policy_config: OperatorPolicyConfig | dict | None = None,
     ) -> dict:
         return self._run(
             initial_state={
@@ -59,6 +61,7 @@ class StrategicSwarmRunner:
                 "run_mode": "demo",
                 "portfolio_positions": portfolio_positions or [],
                 "watchlist": watchlist or [],
+                "operator_policy_config": operator_policy_config,
             }
         )
 
@@ -69,6 +72,7 @@ class StrategicSwarmRunner:
         end_at: datetime,
         portfolio_positions: list[PortfolioPosition | dict] | None = None,
         watchlist: list[WatchlistEntry | dict] | None = None,
+        operator_policy_config: OperatorPolicyConfig | dict | None = None,
     ) -> dict:
         return self._run(
             initial_state={
@@ -77,6 +81,7 @@ class StrategicSwarmRunner:
                 "window_end": end_at.isoformat(),
                 "portfolio_positions": portfolio_positions or [],
                 "watchlist": watchlist or [],
+                "operator_policy_config": operator_policy_config,
             }
         )
 
@@ -86,6 +91,7 @@ class StrategicSwarmRunner:
         lookback_minutes: int | None = None,
         portfolio_positions: list[PortfolioPosition | dict] | None = None,
         watchlist: list[WatchlistEntry | dict] | None = None,
+        operator_policy_config: OperatorPolicyConfig | dict | None = None,
     ) -> dict:
         lookback = lookback_minutes or int(os.getenv("FAULTLINE_DEFAULT_LOOKBACK_MINUTES", "60"))
         end_at = datetime.now(UTC)
@@ -95,6 +101,7 @@ class StrategicSwarmRunner:
             end_at=end_at,
             portfolio_positions=portfolio_positions,
             watchlist=watchlist,
+            operator_policy_config=operator_policy_config,
         )
 
     def ingest_window(self, *, start_at: datetime, end_at: datetime) -> dict:
@@ -231,6 +238,11 @@ class StrategicSwarmRunner:
             item if isinstance(item, WatchlistEntry) else WatchlistEntry.model_validate(item)
             for item in initial_state.get("watchlist", [])
         ]
+        if initial_state.get("operator_policy_config") is not None:
+            policy = initial_state["operator_policy_config"]
+            initial_state["operator_policy_config"] = (
+                policy if isinstance(policy, OperatorPolicyConfig) else OperatorPolicyConfig.model_validate(policy)
+            )
         initial_state = {
             **initial_state,
             "diagnostics": {"run_id": run_id},

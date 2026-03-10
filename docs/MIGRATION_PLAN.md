@@ -23,6 +23,7 @@ The old architecture should be treated as disposable where it creates drag. Pres
 - [~] Slice 6: operator storytelling underway.
 - [x] Added portfolio/watchlist-aware actioning and endangered-symbol reporting.
 - [~] Added scenario-tree prediction layer with stage-transition warnings and confidence-band boundaries (current branch).
+- [~] Added configurable operator decision policy with timing-window "leave-before-too-late" actions (current branch).
 
 ## Operating Rules
 

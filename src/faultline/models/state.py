@@ -10,6 +10,7 @@ from faultline.models.contracts import (
     EventCluster,
     FinalReport,
     MarketImplication,
+    OperatorPolicyConfig,
     OutcomeRecord,
     PortfolioPosition,
     Prediction,
@@ -31,6 +32,7 @@ class FaultlineInputSchema(TypedDict, total=False):
     window_end: str
     portfolio_positions: list[PortfolioPosition]
     watchlist: list[WatchlistEntry]
+    operator_policy_config: OperatorPolicyConfig
 
 
 class FaultlineState(TypedDict, total=False):
@@ -40,6 +42,7 @@ class FaultlineState(TypedDict, total=False):
     window_end: str
     portfolio_positions: list[PortfolioPosition]
     watchlist: list[WatchlistEntry]
+    operator_policy_config: OperatorPolicyConfig
     raw_signals: list[RawSignal]
     normalized_events: list[SignalEvent]
     event_clusters: list[EventCluster]

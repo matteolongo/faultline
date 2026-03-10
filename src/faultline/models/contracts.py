@@ -292,6 +292,26 @@ class WatchlistEntry(BaseModel):
     notes: str | None = None
 
 
+class OperatorPolicyConfig(BaseModel):
+    implication_enter_threshold: float = Field(default=0.68, ge=0.0, le=1.0)
+    asymmetric_enter_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
+    negative_avoid_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    portfolio_trim_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
+    portfolio_exit_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
+    watchlist_enter_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
+    watchlist_avoid_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    stage_warning_watch_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    stage_warning_trim_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
+    stage_warning_exit_threshold: float = Field(default=0.82, ge=0.0, le=1.0)
+    timing_trim_threshold: float = Field(default=0.58, ge=0.0, le=1.0)
+    timing_exit_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
+    high_urgency_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+    timing_critical_windows: list[str] = Field(
+        default_factory=lambda: ["immediate", "days to 2 weeks", "days to 4 weeks"]
+    )
+    allow_conflicting_actions: bool = False
+
+
 class ExitSignal(BaseModel):
     target: str
     description: str
