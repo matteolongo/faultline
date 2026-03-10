@@ -564,7 +564,12 @@ class SignalStore:
                 INSERT INTO situation_snapshots (
                     situation_id, title, domain, stage, confidence, payload_json
                 ) VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (situation_id) DO UPDATE SET payload_json = EXCLUDED.payload_json
+                ON CONFLICT (situation_id) DO UPDATE SET
+                    title = EXCLUDED.title,
+                    domain = EXCLUDED.domain,
+                    stage = EXCLUDED.stage,
+                    confidence = EXCLUDED.confidence,
+                    payload_json = EXCLUDED.payload_json
             """
         with self.connection() as connection:
             connection.cursor().execute(
@@ -604,7 +609,13 @@ class SignalStore:
                 INSERT INTO predictions (
                     prediction_id, run_id, prediction_type, time_horizon, confidence, status, payload_json
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (prediction_id) DO UPDATE SET payload_json = EXCLUDED.payload_json
+                ON CONFLICT (prediction_id) DO UPDATE SET
+                    run_id = EXCLUDED.run_id,
+                    prediction_type = EXCLUDED.prediction_type,
+                    time_horizon = EXCLUDED.time_horizon,
+                    confidence = EXCLUDED.confidence,
+                    status = EXCLUDED.status,
+                    payload_json = EXCLUDED.payload_json
             """
         rows = [
             (
@@ -643,7 +654,12 @@ class SignalStore:
                 INSERT INTO outcome_records (
                     prediction_id, run_id, prediction_type, target, outcome_status, confidence_delta, payload_json
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (run_id, prediction_id) DO UPDATE SET payload_json = EXCLUDED.payload_json
+                ON CONFLICT (run_id, prediction_id) DO UPDATE SET
+                    prediction_type = EXCLUDED.prediction_type,
+                    target = EXCLUDED.target,
+                    outcome_status = EXCLUDED.outcome_status,
+                    confidence_delta = EXCLUDED.confidence_delta,
+                    payload_json = EXCLUDED.payload_json
             """
         rows = [
             (
