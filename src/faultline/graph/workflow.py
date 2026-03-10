@@ -105,7 +105,7 @@ class StrategicSwarmWorkflow:
             return {
                 "raw_signals": raw,
                 "provenance": [f"Ingested {len(raw)} raw signals from sample providers for {scenario_id}."],
-                "diagnostics": {"source_counts": {"sample": len(raw)}},
+                "diagnostics": {**state.get("diagnostics", {}), "source_counts": {"sample": len(raw)}},
             }
 
         now = datetime.now(UTC)
@@ -133,7 +133,7 @@ class StrategicSwarmWorkflow:
         return {
             "raw_signals": raw,
             "provenance": [f"Ingested {len(raw)} raw signals from live providers."],
-            "diagnostics": {"source_counts": provider_counts},
+            "diagnostics": {**state.get("diagnostics", {}), "source_counts": provider_counts},
         }
 
     def normalize_events(self, state: FaultlineState) -> FaultlineState:

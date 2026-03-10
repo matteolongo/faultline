@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 from collections import Counter
@@ -23,7 +24,8 @@ class HashingEmbedder:
         tokens = re.findall(r"[a-z0-9]+", text.lower())
         counts = Counter(tokens)
         for token, weight in counts.items():
-            vector[hash(token) % self.dims] += float(weight)
+            bucket = int(hashlib.md5(token.encode()).hexdigest(), 16) % self.dims
+            vector[bucket] += float(weight)
         norm = math.sqrt(sum(value * value for value in vector)) or 1.0
         return [value / norm for value in vector]
 

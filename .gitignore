@@ -17,6 +17,9 @@ build/
 coverage.xml
 htmlcov/
 
+# Temporary files
+tmp/
+
 # Environment & secrets
 .env
 .env.local
@@ -38,6 +41,3 @@ notebooks/outputs/
 
 # VSCode (settings committed, but workspace-local overrides excluded)
 .vscode/*.code-workspace
-
-# Pytest temporary directories (created in /tmp during test runs)
-tmp/
