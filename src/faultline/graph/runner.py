@@ -12,7 +12,7 @@ from faultline.persistence.store import SignalStore
 from faultline.prediction import OutcomeEvaluator
 from faultline.providers.registry import build_live_providers
 from faultline.providers.sample import SampleScenarioRepository
-from faultline.synthesis.report_builder import render_markdown
+from faultline.synthesis.report_builder import render_markdown, render_outcome_markdown
 from faultline.utils.env import bootstrap_env
 from faultline.utils.io import (
     ensure_directory,
@@ -136,6 +136,7 @@ class StrategicSwarmRunner:
                 signal if isinstance(signal, RawSignal) else RawSignal.model_validate(signal)
                 for signal in followup_signals
             ]
+            self.store.save_raw_signals(signals)
         else:
             if not start_at or not end_at:
                 raise ValueError("Follow-up scoring requires explicit signals or start_at/end_at.")
@@ -143,6 +144,10 @@ class StrategicSwarmRunner:
         outcomes = self.outcome_evaluator.score(predictions, signals)
         self.store.save_outcome_records(run_id=run_id, outcomes=outcomes)
         summary = self._summarize_outcomes(outcomes)
+        run_dir = self._resolve_run_dir(run_id)
+        if run_dir is not None:
+            write_json(run_dir / "outcomes.json", {"run_id": run_id, "summary": summary, "outcomes": outcomes})
+            write_text(run_dir / "outcomes.md", render_outcome_markdown(run_id=run_id, outcomes=outcomes, summary=summary))
         return {
             "run_id": run_id,
             "followup_signal_count": len(signals),
@@ -233,6 +238,12 @@ class StrategicSwarmRunner:
             if item.outcome_status in counts:
                 counts[item.outcome_status] += 1
         return counts
+
+    def _resolve_run_dir(self, run_id: str) -> Path | None:
+        candidates = list(self.output_dir.glob(f"*/{run_id}"))
+        if candidates:
+            return candidates[0]
+        return None
 
 
 def default_goldset() -> list[str]:

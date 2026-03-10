@@ -2,6 +2,8 @@ from faultline.graph.runner import StrategicSwarmRunner
 from faultline.presentation.operator_surface import (
     available_demo_scenarios,
     list_recent_runs,
+    load_outcome_json,
+    load_outcome_markdown,
     load_report_markdown,
     parse_operator_datetime,
     run_and_summarize,
@@ -67,3 +69,41 @@ def test_operator_surface_lists_recent_runs_and_parses_time(tmp_path) -> None:
     parsed = parse_operator_datetime("2026-03-08T10:00:00Z")
     assert parsed.isoformat().startswith("2026-03-08T10:00:00+00:00")
     assert "open_model_breakout" in available_demo_scenarios()
+
+
+def test_operator_surface_loads_followup_outcomes(tmp_path) -> None:
+    runner = StrategicSwarmRunner(
+        output_dir=tmp_path / "outputs",
+        database_url=f"sqlite:///{tmp_path / 'runs.sqlite'}",
+    )
+    initial = runner.run_demo("open_model_breakout")
+    runner.score_followup(
+        run_id=initial["run_id"],
+        followup_signals=[
+            {
+                "id": "followup-1",
+                "provider_name": "sample",
+                "provider_item_id": "followup-1",
+                "source": "news",
+                "timestamp": "2026-03-12T10:00:00+00:00",
+                "fetched_at": "2026-03-12T10:00:00+00:00",
+                "published_at": "2026-03-12T10:00:00+00:00",
+                "signal_type": "news",
+                "title": "Enterprise Cloud Suite cuts prices to defend its bundle",
+                "summary": "Portability and platform bypass remain central to customer discussions.",
+                "region": "Global",
+                "entities": ["Enterprise Cloud Suite"],
+                "tags": ["discount", "platform", "portability", "response"],
+                "confidence": 0.8,
+                "payload": {},
+            }
+        ],
+    )
+
+    outcome_json = load_outcome_json(initial["run_dir"])
+    outcome_markdown = load_outcome_markdown(initial["run_dir"])
+
+    assert outcome_json is not None
+    assert "summary" in outcome_json
+    assert outcome_markdown is not None
+    assert "## Outcomes" in outcome_markdown

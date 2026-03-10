@@ -5,6 +5,7 @@ from faultline.models import (
     EventCluster,
     FinalReport,
     MarketImplication,
+    OutcomeRecord,
     Prediction,
     RelatedSituation,
     SituationSnapshot,
@@ -174,4 +175,29 @@ def render_markdown(report: FinalReport) -> str:
             *[f"- {item}" for item in report.provenance],
         ]
     )
+    return "\n".join(lines)
+
+
+def render_outcome_markdown(*, run_id: str, outcomes: list[OutcomeRecord], summary: dict[str, int]) -> str:
+    lines = [
+        "# Faultline Follow-Up Review",
+        "",
+        "## Run",
+        run_id,
+        "",
+        "## Summary",
+        f"- Confirmed: {summary.get('confirmed', 0)}",
+        f"- Partial: {summary.get('partial', 0)}",
+        f"- Unconfirmed: {summary.get('unconfirmed', 0)}",
+        "",
+        "## Outcomes",
+    ]
+    for item in outcomes:
+        lines.extend(
+            [
+                f"- `{item.prediction_type}` on `{item.target}` -> **{item.outcome_status}**",
+                f"  {item.explanation}",
+                f"  Evidence: {', '.join(item.supporting_signal_ids) if item.supporting_signal_ids else 'none'}",
+            ]
+        )
     return "\n".join(lines)

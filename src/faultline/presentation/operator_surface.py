@@ -37,6 +37,20 @@ def summarize_final_state(final_state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def load_outcome_markdown(run_dir: str | Path) -> str | None:
+    path = Path(run_dir) / "outcomes.md"
+    if not path.exists():
+        return None
+    return path.read_text()
+
+
+def load_outcome_json(run_dir: str | Path) -> dict[str, Any] | None:
+    path = Path(run_dir) / "outcomes.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
 def load_report_markdown(run_dir: str | Path) -> str | None:
     path = Path(run_dir) / "report.md"
     if not path.exists():
@@ -112,9 +126,17 @@ def run_and_summarize(
     summary = summarize_final_state(serialize_model(result["final_state"]))
     summary["run_id"] = result["run_id"]
     summary["run_dir"] = result["run_dir"]
+    outcome_json = load_outcome_json(result["run_dir"])
+    if outcome_json:
+        outcome_summary = outcome_json.get("summary", {})
+        summary["confirmed_outcomes"] = outcome_summary.get("confirmed", 0)
+        summary["partial_outcomes"] = outcome_summary.get("partial", 0)
+        summary["unconfirmed_outcomes"] = outcome_summary.get("unconfirmed", 0)
     return {
         "result": result,
         "summary": summary,
         "report_markdown": load_report_markdown(result["run_dir"]),
         "report_json": load_report_json(result["run_dir"]),
+        "outcome_markdown": load_outcome_markdown(result["run_dir"]),
+        "outcome_json": outcome_json,
     }
