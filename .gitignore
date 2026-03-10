@@ -17,6 +17,9 @@ build/
 coverage.xml
 htmlcov/
 
+# Temporary files
+tmp/
+
 # Environment & secrets
 .env
 .env.local
