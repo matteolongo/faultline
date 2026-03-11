@@ -52,8 +52,10 @@ CONSTRAINT_TAGS = {
 TECH_OPEN_TAGS = {"open-source", "protocol", "portability", "plugin-ecosystem", "developer-tools"}
 FINANCIAL_STRESS_TAGS = {"debt", "refinancing", "spread-widening", "market-stress", "cloud-spend"}
 
+
 def _scoring() -> dict:
     return load_scoring()
+
 
 ASYMMETRY_CONFIDENCE_MIN: float = load_scoring()["confidence_bands"]["asymmetry_confidence_min"]
 HIGH_CONFIDENCE_MIN: float = load_scoring()["confidence_bands"]["high_confidence_min"]
@@ -73,8 +75,6 @@ ACTION_PRIORITY = {
     "trim": 4,
     "exit": 5,
 }
-
-
 
 
 class MechanismAnalyzer:

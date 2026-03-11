@@ -16,8 +16,7 @@ class PortfolioActionEngine(_PortfolioActionEngine):
 
     def __init__(self, *args, **kwargs):
         _warnings.warn(
-            "PortfolioActionEngine is deprecated and will be removed in a future release. "
-            "Use ActionEngine instead.",
+            "PortfolioActionEngine is deprecated and will be removed in a future release. Use ActionEngine instead.",
             DeprecationWarning,
             stacklevel=2,
         )
