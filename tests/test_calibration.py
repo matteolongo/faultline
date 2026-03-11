@@ -157,8 +157,8 @@ def test_bad_calibration_makes_actions_more_conservative() -> None:
         )
     ]
 
-    good_actions, _, _ = action_engine.generate(snapshot, [implication], [], good_calibration)
-    bad_actions, _, _ = action_engine.generate(snapshot, [implication], [], bad_calibration)
+    good_actions, good_exits, good_endangered = action_engine.generate(snapshot, [implication], [], good_calibration)
+    bad_actions, bad_exits, bad_endangered = action_engine.generate(snapshot, [implication], [], bad_calibration)
 
     assert good_actions[0].confidence > bad_actions[0].confidence
     assert good_actions[0].action in {"avoid", "enter"}
