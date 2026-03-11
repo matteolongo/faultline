@@ -38,6 +38,7 @@ except Exception:  # pragma: no cover
 
 
 from faultline.analysis import ActionEngine, MarketMapper, PredictionEngine, SituationMapper
+from faultline.analysis.portfolio_engine import PortfolioActionEngine
 from faultline.memory import SituationMemory
 from faultline.models import FaultlineState
 from faultline.persistence.store import SignalStore, make_dead_letter
@@ -67,6 +68,7 @@ class StrategicSwarmWorkflow:
         self.prediction_engine = PredictionEngine()
         self.market_mapper = MarketMapper()
         self.action_engine = ActionEngine()
+        self.portfolio_engine = PortfolioActionEngine()
         self.report_builder = ReportBuilder()
 
     def build(self, *, _input_schema=None):
@@ -105,7 +107,7 @@ class StrategicSwarmWorkflow:
             return {
                 "raw_signals": raw,
                 "provenance": [f"Ingested {len(raw)} raw signals from sample providers for {scenario_id}."],
-                "diagnostics": {"source_counts": {"sample": len(raw)}},
+                "diagnostics": {**state.get("diagnostics", {}), "source_counts": {"sample": len(raw)}},
             }
 
         now = datetime.now(UTC)
@@ -133,7 +135,7 @@ class StrategicSwarmWorkflow:
         return {
             "raw_signals": raw,
             "provenance": [f"Ingested {len(raw)} raw signals from live providers."],
-            "diagnostics": {"source_counts": provider_counts},
+            "diagnostics": {**state.get("diagnostics", {}), "source_counts": provider_counts},
         }
 
     def normalize_events(self, state: FaultlineState) -> FaultlineState:
@@ -271,6 +273,14 @@ class StrategicSwarmWorkflow:
             state.get("stage_transition_warnings", []),
             state.get("operator_policy_config"),
         )
+        portfolio_actions, portfolio_exits, endangered_symbols = self.portfolio_engine.generate(
+            state.get("market_implications", []),
+            state.get("calibration_signals", []),
+            state.get("portfolio_positions", []),
+            state.get("watchlist", []),
+        )
+        actions = actions + portfolio_actions
+        exits = exits + portfolio_exits
         return {
             "action_recommendations": actions,
             "exit_signals": exits,
