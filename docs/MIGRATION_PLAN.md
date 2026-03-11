@@ -27,6 +27,7 @@ The old architecture should be treated as disposable where it creates drag. Pres
 - [~] Added automatic follow-up rescoring loop over stored windows, with calibration refresh from new outcomes (current branch).
 - [~] Upgraded report storytelling with action-to-evidence traceability and explicit confidence-boundary sections (current branch).
 - [x] Removed disconnected legacy `agents`/`scoring` pipelines and obsolete archetype-scoring configs from the main codebase.
+- [x] Removed legacy report aliases (`opportunity_map`, `fragility_map`, `ripple_map`, `execution_recommendations`) from runtime contracts and UI.
 
 ## Operating Rules
 

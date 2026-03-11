@@ -81,9 +81,9 @@ def main() -> None:
             st.markdown(report_json.get("executive_summary", "No report generated."))
             if report_json.get("monitor_only_reason"):
                 st.warning(report_json["monitor_only_reason"])
-            if report_json.get("opportunity_map"):
-                st.markdown("### Opportunity Map")
-                for item in report_json["opportunity_map"]:
+            if report_json.get("market_implications"):
+                st.markdown("### Market Implications")
+                for item in report_json["market_implications"]:
                     st.markdown(f"- {item}")
             st.markdown("### Provenance")
             for item in report_json.get("provenance", []):

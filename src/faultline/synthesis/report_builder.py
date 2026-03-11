@@ -135,10 +135,6 @@ class ReportBuilder:
             calibration_notes=calibration_notes,
             provenance=provenance,
             monitor_only_reason=monitor_reason,
-            fragility_map=mechanism_map,
-            ripple_map=scenario_map,
-            opportunity_map=market_lines,
-            execution_recommendations=action_lines,
         )
 
     def _render_scenario_branch(self, path: ScenarioPath) -> str:
