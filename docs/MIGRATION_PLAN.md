@@ -28,6 +28,7 @@ The old architecture should be treated as disposable where it creates drag. Pres
 - [~] Upgraded report storytelling with action-to-evidence traceability and explicit confidence-boundary sections (current branch).
 - [x] Removed disconnected legacy `agents`/`scoring` pipelines and obsolete archetype-scoring configs from the main codebase.
 - [x] Removed legacy report aliases (`opportunity_map`, `fragility_map`, `ripple_map`, `execution_recommendations`) from runtime contracts and UI.
+- [x] Refreshed repository documentation to align with the system-first workflow and removed legacy architecture references.
 
 ## Operating Rules
 
