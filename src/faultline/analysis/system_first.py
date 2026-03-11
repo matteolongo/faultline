@@ -541,24 +541,6 @@ class ActionEngine:
             )
         return actions, exits
 
-    def generate_portfolio_actions(
-        self,
-        implications: list[MarketImplication],
-        calibration_signals: list[CalibrationSignal] | None = None,
-        portfolio_positions: list[PortfolioPosition] | None = None,
-        watchlist: list[WatchlistEntry] | None = None,
-    ) -> tuple[list[ActionRecommendation], list[str]]:
-        calibration_index = _calibration_by_type(calibration_signals)
-        portfolio_positions = portfolio_positions or []
-        watchlist = watchlist or []
-        actions: list[ActionRecommendation] = []
-        portfolio_actions = self._portfolio_actions(portfolio_positions, implications, calibration_index)
-        actions.extend(portfolio_actions)
-        watchlist_actions = self._watchlist_actions(watchlist, implications, calibration_index)
-        actions.extend(watchlist_actions)
-        endangered = sorted(set(self._endangered_symbols(portfolio_positions, implications, calibration_index)))
-        return actions, endangered
-
     def _conviction_for(
         self,
         implication: MarketImplication,
@@ -570,6 +552,22 @@ class ActionEngine:
             return implication.confidence
         adjustment = (signal.confirmed_rate - signal.unconfirmed_rate) * 0.1 + signal.average_confidence_delta * 0.35
         return max(0.05, min(0.95, implication.confidence + adjustment))
+
+    def generate_portfolio_actions(
+        self,
+        implications: list[MarketImplication],
+        calibration_signals: list[CalibrationSignal] | None = None,
+        portfolio_positions: list[PortfolioPosition] | None = None,
+        watchlist: list[WatchlistEntry] | None = None,
+    ) -> tuple[list[ActionRecommendation], list[str]]:
+        calibration_index = _calibration_by_type(calibration_signals)
+        portfolio_positions = portfolio_positions or []
+        watchlist = watchlist or []
+        actions: list[ActionRecommendation] = []
+        actions.extend(self._portfolio_actions(portfolio_positions, implications, calibration_index))
+        actions.extend(self._watchlist_actions(watchlist, implications, calibration_index))
+        endangered = sorted(set(self._endangered_symbols(portfolio_positions, implications, calibration_index)))
+        return actions, endangered
 
     def _portfolio_actions(
         self,
