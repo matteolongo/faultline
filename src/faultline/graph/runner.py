@@ -22,7 +22,7 @@ from faultline.models import (
 )
 from faultline.persistence.store import SignalStore, make_dead_letter
 from faultline.prediction import OutcomeEvaluator
-from faultline.providers.base import ProviderError
+from faultline.providers.base import ProviderError, SignalProvider
 from faultline.providers.live import WebSearchEnricher
 from faultline.providers.registry import build_live_providers
 from faultline.providers.sample import SampleScenarioRepository
@@ -42,7 +42,7 @@ class StrategicSwarmRunner:
         output_dir: str | Path | None = None,
         db_path: str | Path | None = None,
         database_url: str | None = None,
-        live_providers: list | None = None,
+        live_providers: list[SignalProvider] | None = None,
         web_search_provider: WebSearchEnricher | None = None,
         topic_chat_intake: TopicChatIntake | None = None,
     ) -> None:
@@ -454,7 +454,7 @@ class StrategicSwarmRunner:
             )
         initial_state = {
             **initial_state,
-            "diagnostics": {"run_id": run_id, **initial_state.get("diagnostics", {})},
+            "diagnostics": {**initial_state.get("diagnostics", {}), "run_id": run_id},
         }
         snapshots = list(self.workflow.stream(initial_state, stream_mode="values"))
         final_state = snapshots[-1]

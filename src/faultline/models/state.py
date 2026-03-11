@@ -33,13 +33,6 @@ class FaultlineInputSchema(TypedDict, total=False):
     run_mode: str
     window_start: str
     window_end: str
-    portfolio_positions: list[PortfolioPosition]
-    watchlist: list[WatchlistEntry]
-    operator_policy_config: OperatorPolicyConfig
-    topic_prompt: TopicPrompt
-    research_brief: ResearchBrief
-    chat_intake_session: ChatIntakeSession
-    retrieval_questions: list[str]
 
 
 class FaultlineState(TypedDict, total=False):
