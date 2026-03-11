@@ -1,154 +1,103 @@
-# Faultline — Domain Glossary
+# Faultline Glossary
 
-This glossary defines the core domain concepts used throughout the codebase. When in doubt about what a term means or where it lives in code, start here.
+## Situation Modeling
 
----
+### Situation Snapshot
+Structured representation of the current system under pressure, including actors, forces, relations, mechanisms, stage, risks, and supporting evidence.  
+Code: `models/contracts.py::SituationSnapshot`
 
-## Core Topology Concepts
+### Actor
+Entity participating in the situation with objectives, constraints, resources, influence, and adaptability attributes.  
+Code: `models/contracts.py::Actor`
 
-### Empire
-The **centralized defensive order** in a structural conflict. The Empire is the incumbent: the entity with a large, expensive surface to defend, high fixed costs, and concentrated nodes. It is structurally fragile because its defense scales faster than the attacker's offense.
+### Force
+Directional pressure shaping the situation outcome (default classes: power, constraints, alliances, resources, timing).  
+Code: `models/contracts.py::Force`
 
-**Examples:** NATO's undersea cable infrastructure, a proprietary AI platform, a sovereign debt structure  
-**Code:** `archetype.empire_type` in `configs/archetypes.yaml`; `AbstractPattern.empire_nodes` in `models/contracts.py`
+### Relation
+Typed relationship between actors (for example competition, alliance, leverage, dependency).  
+Code: `models/contracts.py::Relation`
 
-### Disruptor
-The **distributed adaptive challenger**. The Disruptor exploits structural fragility in the Empire using cheap, scalable, or parallel means. The Disruptor wins by making the Empire spend more to defend than the Disruptor spends to probe.
+### Mechanism
+Reusable causal pattern explaining how visible signals translate into strategic pressure.  
+Code: `models/contracts.py::Mechanism`; config in `configs/mechanisms.yaml`
 
-**Examples:** A bypass cable network, an open-weight AI model, a drone swarm  
-**Code:** `archetype.disruptor_type` in `configs/archetypes.yaml`; `AbstractPattern.disruptor_nodes`
+### Stage Assessment
+Current phase on the stage ladder (for example `strategic_positioning`, `open_contestation`, `repricing`).  
+Code: `models/contracts.py::StageAssessment`; config in `configs/stages.yaml`
 
-### Archetype
-A **named structural conflict topology** — a pattern of Empire vs. Disruptor dynamics that recurs across different historical and contemporary scenarios.
+## Prediction Layer
 
-Three archetypes are currently defined:
-- **`empire_vs_swarm`**: Centralized defense vs. distributed swarm probes
-- **`chokepoint_vs_bypass`**: Control of a narrow route vs. low-cost rerouting
-- **`monolith_vs_protocol`**: Proprietary integrated system vs. open protocol adoption
+### Prediction
+Explicit forecast unit with type, time horizon, confidence, banding, and prior evidence.  
+Prediction types: `actor_move`, `narrative`, `asset_repricing`, `timing_window`.  
+Code: `models/contracts.py::Prediction`
 
-**Code:** `configs/archetypes.yaml`; loaded by `utils/config.py`; matched in `graph/workflow.py::detect_scenario`
+### Scenario Path
+One branch in the scenario tree (base/upside/downside style branch with probability and confidence band).  
+Code: `models/contracts.py::ScenarioPath`
 
-### Asymmetry
-The **ratio of disruption cost to defense cost**. High asymmetry means the Disruptor can probe cheaply while the Empire spends heavily to defend each node. This is the core signal — high asymmetry = structural fragility = potential opportunity.
+### Stage Transition Warning
+Warning that stage progression or reversal is likely within a lead-time window, including probability and trigger.  
+Code: `models/contracts.py::StageTransitionWarning`
 
-**Code:** `AbstractPattern.asymmetry_score` (float 0–1); `scoring/fragility.py`
+### Confidence Bands
+Shared interpretation layer used in prediction/reporting:
+- `high_confidence`: stronger evidence and tighter execution bias
+- `asymmetric`: meaningful edge with non-trivial uncertainty
+- `speculative`: monitor-first posture
 
-### Cheap Weapon
-A **low-cost disruption vector** that exploits the Empire's expensive defense surface. The Cheap Weapon is the mechanism through which asymmetry is realized.
+## Market & Action Layer
 
-**Examples:** An open-source model release collapsing pricing power; a software-defined routing layer bypassing a physical chokepoint; a drone strike against a high-value but lightly defended node  
-**Code:** `archetype.cheap_weapon_examples` in `configs/archetypes.yaml`
+### Market Implication
+Translation from structural mechanism to directional market pressure on an asset/theme/sector target.  
+Code: `models/contracts.py::MarketImplication`
 
----
+### Action Recommendation
+Operator-facing recommendation. Core actions:
+- `watch`
+- `enter`
+- `trim`
+- `exit`
+- `avoid`
+Code: `models/contracts.py::ActionRecommendation`
 
-## Signal & Data Concepts
+### Endangered Symbol
+Held symbol flagged as vulnerable under current calibrated downside implications.  
+Code path: `analysis/system_first.py::ActionEngine`
 
-### RawSignal
-An **unprocessed data point** as fetched from a provider. Contains source, timestamp, headline/title, URL, and raw metadata.  
-**Code:** `models/contracts.py::RawSignal`
+### Operator Policy Config
+Configurable threshold set controlling action gating, conflict resolution, and timing-window behavior.  
+Code: `models/contracts.py::OperatorPolicyConfig`
 
-### SignalEvent
-A **normalized, deduplicated signal** with salience score, tags, and structural metadata attached. This is the primary unit processed through the pipeline.  
-**Code:** `models/contracts.py::SignalEvent`
+### Leave-Before-Too-Late Logic
+Timing-window policy behavior that escalates from watch/trim to exit when timing pressure and stage warnings cross configured thresholds.  
+Code path: `analysis/system_first.py::ActionEngine._timing_actions`
 
-### EventCluster
-A **group of `SignalEvent`s** that share a structural story — the same archetype trigger, geography, or entity.  
-**Code:** `models/contracts.py::EventCluster`
+## Learning Loop
 
-### AbstractPattern
-The **structural interpretation** of a cluster: which nodes are Empire, which are Disruptor, what the asymmetry score is, and what the cheap weapon is.  
-**Code:** `models/contracts.py::AbstractPattern`
+### Outcome Record
+Follow-up evaluation record for a prediction, including status (`confirmed`, `partial`, `unconfirmed`) and confidence delta.  
+Code: `models/contracts.py::OutcomeRecord`
 
----
+### Calibration Signal
+Aggregated historical prediction performance by prediction type; used to nudge confidence and rationale framing.  
+Code: `models/contracts.py::CalibrationSignal`; loaded via `persistence/store.py`
 
-## Scoring Concepts
+### Automatic Follow-Up Scoring
+Batch rescoring flow that applies a follow-up signal window to eligible prior runs and refreshes calibration inputs.  
+Code: `graph/runner.py::auto_score_followups`; CLI `auto-followup`
 
-### Fragility Score
-A **composite 0–1 measure** of structural weakness at a node or cluster level. Combines six weighted factors:
+## Reporting & Traceability
 
-| Factor | Weight | What it measures |
-|--------|--------|-----------------|
-| `hubris_index` | 0.18 | Incumbent overconfidence — ignoring or dismissing the disruption |
-| `energy_defense_ratio` | 0.22 | Cost asymmetry — how expensive is defense vs. disruption? |
-| `kinetic_ripple` | 0.16 | Physical or kinetic pressure creating cascade potential |
-| `centralization_score` | 0.20 | Single points of failure — how concentrated is the Empire node? |
-| `redundancy_penalty` | 0.12 | Lack of fallback paths (negative = more fragile) |
-| `antifragility_attraction` | 0.12 | Whether the Disruptor benefits from stress and disorder |
+### Final Report
+Structured analyst memo payload containing situation map, scenario tree, implications, actions, confidence boundaries, traceability, evidence, and references.  
+Code: `models/contracts.py::FinalReport`
 
-**Code:** `configs/scoring.yaml` (weights); `scoring/fragility.py::FragilityScorer`
-
-### Fragility Assessment
-The **output of fragility scoring** for a single node: the score, dominant factor, contributing signals, and confidence level.  
-**Code:** `models/contracts.py::FragilityAssessment`
-
-### High Fragility Threshold
-Nodes scoring above **0.72** are classified as "high fragility" — eligible for opportunity generation.  
-**Code:** `configs/scoring.yaml::thresholds.high_fragility`
-
----
-
-## Opportunity Concepts
-
-### EquityOpportunity
-A **structured opportunity idea** surfaced from a fragile node: the thesis, target entity, long/short direction, invalidation conditions, time horizon, and conviction score.  
-**Code:** `models/contracts.py::EquityOpportunity`
-
-### Invalidation Logic
-**Explicit conditions under which an opportunity thesis fails.** Every `EquityOpportunity` must have at least one invalidation condition. This prevents vague or unfalsifiable ideas.  
-**Code:** `EquityOpportunity.invalidation_conditions` (list of strings)
+### Action Traceability
+Section linking each action to supporting prediction(s), stage warnings, and evidence references.  
+Code path: `synthesis/report_builder.py`
 
 ### Monitor-Only
-A flag (`EquityOpportunity.monitor_only = True`) indicating the idea has **structural merit but insufficient evidence** to act. It should be tracked, not traded.  
-**Code:** `models/contracts.py::EquityOpportunity.monitor_only`; gated in `agents/execution_critic.py`
-
-### Convexity
-A measure of the **asymmetric payoff profile** of an opportunity. High convexity = limited downside, large potential upside. The system targets only high-convexity ideas.
-
----
-
-## Pipeline Concepts
-
-### Run Mode
-How signals are sourced for a pipeline run:
-- `demo` — loads deterministic fixture signals from `data/samples/`
-- `live` — fetches signals for a specified `window_start`/`window_end`
-- `latest` — fetches signals for the last N minutes (default 60)
-- `replay` — rebuilds a report from previously stored raw signals
-
-**Code:** `FaultlineState.run_mode`; `graph/runner.py`
-
-### Ripple Scenario
-A **projected second-order cascade effect** from a fragility event. Ripple scenarios map what breaks next if the primary node fails.  
-**Code:** `models/contracts.py::RippleScenario`; generated by `agents/ripple_architect.py`
-
-### Dead Letter
-A **failed provider fetch** that is logged to persistence rather than crashing the pipeline. Allows partial ingestion to proceed.  
-**Code:** `persistence/store.py::log_dead_letter()`
-
-### Trace
-A **node-by-node state snapshot** written to `outputs/{scenario}/{run_id}/trace.json`. Each entry is one state snapshot per node — enables replay and debugging of any run step by step.  
-**Code:** `graph/runner.py`; `utils/io.py`
-
----
-
-## LLM Concepts
-
-### StructuredReasoner
-The **base class for all LLM-backed agent nodes**. Wraps OpenAI's structured output API with schema enforcement. All four LLM agents extend this.  
-**Code:** `llm/backend.py::StructuredReasoner`
-
-### Schema Enforcement
-OpenAI's strict structured output mode requires `additionalProperties: false` on every object in the schema **and** all properties listed in `required`. Pydantic doesn't generate this by default — `_enforce_additional_properties()` in `backend.py` patches schemas before every call.  
-**Code:** `llm/backend.py::_enforce_additional_properties()`
-
----
-
-## Provider Concepts
-
-### BaseProvider
-The **interface all signal providers implement**. One method: `fetch_window(start_at, end_at) -> list[RawSignal]`.  
-**Code:** `providers/base.py::BaseProvider`
-
-### Provider Health
-A **connectivity check** for all registered providers. Returns status per provider without failing the pipeline.  
-**Code:** `faultline provider-health` CLI; `providers/registry.py`
+Publication status for low-confidence or weak-agreement situations where full actioning is not justified.  
+Code path: `synthesis/report_builder.py`
