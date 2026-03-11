@@ -62,6 +62,10 @@ def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) ->
     return {item.prediction_type: item for item in (calibration_signals or [])}
 
 
+def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) -> dict[str, CalibrationSignal]:
+    return {item.prediction_type: item for item in (calibration_signals or [])}
+
+
 class MechanismAnalyzer:
     def __init__(self) -> None:
         self.config = load_mechanisms()["mechanisms"]
