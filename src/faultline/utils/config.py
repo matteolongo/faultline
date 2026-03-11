@@ -32,5 +32,10 @@ def load_stages() -> dict[str, Any]:
 
 
 @lru_cache(maxsize=1)
+def load_scoring() -> dict[str, Any]:
+    return load_yaml_config("scoring.yaml")
+
+
+@lru_cache(maxsize=1)
 def load_provider_config() -> dict[str, Any]:
     return load_yaml_config("providers.yaml")

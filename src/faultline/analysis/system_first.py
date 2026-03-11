@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 
+from faultline.analysis.utils import calibration_by_type
 from faultline.models import (
     ActionRecommendation,
     Actor,
@@ -23,7 +24,7 @@ from faultline.models import (
     StageTransitionWarning,
     WatchlistEntry,
 )
-from faultline.utils.config import load_mechanisms, load_stages
+from faultline.utils.config import load_mechanisms, load_scoring, load_stages
 
 COMPETITION_TAGS = {
     "pricing-power",
@@ -50,8 +51,12 @@ CONSTRAINT_TAGS = {
 }
 TECH_OPEN_TAGS = {"open-source", "protocol", "portability", "plugin-ecosystem", "developer-tools"}
 FINANCIAL_STRESS_TAGS = {"debt", "refinancing", "spread-widening", "market-stress", "cloud-spend"}
-ASYMMETRY_CONFIDENCE_MIN = 0.58
-HIGH_CONFIDENCE_MIN = 0.74
+
+def _scoring() -> dict:
+    return load_scoring()
+
+ASYMMETRY_CONFIDENCE_MIN: float = load_scoring()["confidence_bands"]["asymmetry_confidence_min"]
+HIGH_CONFIDENCE_MIN: float = load_scoring()["confidence_bands"]["high_confidence_min"]
 STAGE_SEQUENCE = [
     "latent_tension",
     "signal_emergence",
@@ -70,8 +75,6 @@ ACTION_PRIORITY = {
 }
 
 
-def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) -> dict[str, CalibrationSignal]:
-    return {item.prediction_type: item for item in (calibration_signals or [])}
 
 
 class MechanismAnalyzer:
@@ -345,7 +348,7 @@ class PredictionEngine:
         cluster: EventCluster,
         calibration_signals: list[CalibrationSignal] | None = None,
     ) -> tuple[list[Prediction], list[ScenarioPath], list[StageTransitionWarning]]:
-        calibration_index = _calibration_by_type(calibration_signals)
+        calibration_index = calibration_by_type(calibration_signals)
         incumbent = snapshot.key_actors[0].name if snapshot.key_actors else cluster.region
         challenger = snapshot.key_actors[1].name if len(snapshot.key_actors) > 1 else snapshot.system_under_pressure
         priors = self._prediction_priors(snapshot, cluster)
@@ -618,7 +621,7 @@ class MarketMapper:
         cluster: EventCluster,
         calibration_signals: list[CalibrationSignal] | None = None,
     ) -> list[MarketImplication]:
-        calibration_index = _calibration_by_type(calibration_signals)
+        calibration_index = calibration_by_type(calibration_signals)
         tags = set(cluster.tags)
         if tags.intersection(TECH_OPEN_TAGS):
             implications = [
@@ -708,7 +711,7 @@ class ActionEngine:
         stage_transition_warnings: list[StageTransitionWarning] | None = None,
         operator_policy_config: OperatorPolicyConfig | None = None,
     ) -> tuple[list[ActionRecommendation], list[ActionRecommendation], list[str]]:
-        calibration_index = _calibration_by_type(calibration_signals)
+        calibration_index = calibration_by_type(calibration_signals)
         policy = operator_policy_config or OperatorPolicyConfig()
         portfolio_positions = portfolio_positions or []
         watchlist = watchlist or []
@@ -884,7 +887,7 @@ class ActionEngine:
                 and item.direction == "negative"
                 and position.direction == "long"
             ]
-            if relevant_negative and max(relevant_negative) >= 0.6:
+            if relevant_negative and max(relevant_negative) >= _scoring()["portfolio"]["endangered_threshold"]:
                 endangered.append(position.symbol)
         return endangered
 
@@ -1066,7 +1069,7 @@ class ActionEngine:
     def _urgency(self, confidence: float, policy: OperatorPolicyConfig) -> str:
         if confidence >= policy.high_urgency_threshold:
             return "high"
-        if confidence >= 0.55:
+        if confidence >= _scoring()["confidence_bands"]["conviction_min"]:
             return "medium"
         return "low"
 

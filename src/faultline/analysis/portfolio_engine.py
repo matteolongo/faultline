@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from faultline.analysis.utils import calibration_by_type
 from faultline.models import (
     ActionRecommendation,
     CalibrationSignal,
@@ -7,10 +8,6 @@ from faultline.models import (
     PortfolioPosition,
     WatchlistEntry,
 )
-
-
-def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) -> dict[str, CalibrationSignal]:
-    return {item.prediction_type: item for item in (calibration_signals or [])}
 
 
 class PortfolioActionEngine:
@@ -21,7 +18,7 @@ class PortfolioActionEngine:
         portfolio_positions: list[PortfolioPosition] | None = None,
         watchlist: list[WatchlistEntry] | None = None,
     ) -> tuple[list[ActionRecommendation], list[ActionRecommendation], list[str]]:
-        calibration_index = _calibration_by_type(calibration_signals)
+        calibration_index = calibration_by_type(calibration_signals)
         portfolio_positions = portfolio_positions or []
         watchlist = watchlist or []
         actions: list[ActionRecommendation] = []

@@ -1,0 +1,76 @@
+# Faultline scoring thresholds and confidence parameters.
+# All numeric constants controlling action generation, implication scoring,
+# and portfolio risk assessment live here — not in source code.
+
+# ── Confidence bands ────────────────────────────────────────────────────────
+confidence_bands:
+  # Minimum confidence to qualify as a "high confidence" signal
+  high_confidence_min: 0.74
+  # Minimum confidence to qualify as an "asymmetric opportunity"
+  asymmetry_confidence_min: 0.58
+  # Minimum confidence to be reported as a conviction action
+  conviction_min: 0.55
+
+# ── Actor defaults ───────────────────────────────────────────────────────────
+actor_defaults:
+  # Used when role-specific data is unavailable
+  challenger_adaptability: 0.72
+  incumbent_adaptability: 0.48
+  incumbent_influence: 0.75
+  challenger_influence: 0.58
+
+# ── Prediction engine ────────────────────────────────────────────────────────
+prediction:
+  # Confidence cap for actor-move predictions
+  max_prediction_confidence: 0.92
+  # Confidence scaling factor applied to snapshot confidence
+  snapshot_confidence_scale: 0.9
+  # Base confidence for mechanism signal predictions
+  mechanism_signal_base: 0.45
+  # Base probability for baseline scenario branch
+  scenario_base_probability_max: 0.72
+  scenario_base_probability_min: 0.42
+  # Acceleration scenario probability cap
+  scenario_acceleration_cap: 0.5
+  scenario_acceleration_base: 0.18
+  # Minimum reversal probability
+  scenario_reversal_min: 0.14
+
+# ── Market implication engine ────────────────────────────────────────────────
+implications:
+  # Hardcoded implication confidence values by thesis type
+  high_conviction_opportunity: 0.72
+  strong_opportunity: 0.76
+  moderate_opportunity: 0.68
+  weak_opportunity: 0.61
+  # Calibration adjustment weights
+  calibration_rate_weight: 0.08
+  calibration_delta_weight: 0.30
+
+# ── Portfolio action thresholds ──────────────────────────────────────────────
+# These are defaults; OperatorPolicyConfig overrides them at runtime.
+portfolio:
+  # Conviction threshold to recommend EXIT on a held long position
+  exit_threshold: 0.72
+  # Conviction threshold to recommend TRIM on a held long position
+  trim_threshold: 0.55
+  # Conviction threshold to flag a symbol as endangered
+  endangered_threshold: 0.60
+  # Conviction threshold to recommend ENTER on a watchlist long
+  watchlist_enter_threshold: 0.72
+  # Conviction threshold to recommend AVOID on a watchlist position
+  watchlist_avoid_threshold: 0.65
+  # Calibration adjustment weights for portfolio conviction scoring
+  calibration_rate_weight: 0.10
+  calibration_delta_weight: 0.35
+  # Minimum/max conviction bounds after calibration adjustment
+  conviction_min: 0.05
+  conviction_max: 0.95
+  # Minimum exit recommendation confidence
+  exit_confidence_floor: 0.35
+
+# ── Stage confidence ─────────────────────────────────────────────────────────
+stage:
+  # Base confidence for stage assessment: base + cluster_strength * scale
+  confidence_base: 0.55
+  confidence_scale: 0.25
