@@ -30,6 +30,15 @@ def _load_structured_list(path: str | None) -> list[dict]:
     return payload
 
 
+def _load_structured_object(path: str | None) -> dict | None:
+    if not path:
+        return None
+    payload = json.loads(Path(path).read_text())
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected object in {path}")
+    return payload
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Faultline CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -40,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_demo.add_argument("--watchlist", default=None, help="Comma-separated watchlist symbols")
     run_demo.add_argument("--positions-json", default=None, help="Path to JSON array of position objects")
     run_demo.add_argument("--watchlist-json", default=None, help="Path to JSON array of watchlist objects")
+    run_demo.add_argument("--policy-json", default=None, help="Path to JSON policy config object")
     run_demo.add_argument("--output-dir", default=None)
 
     run_all = subparsers.add_parser("run-all-demos", help="Run all sample scenarios")
@@ -60,6 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_latest.add_argument("--watchlist", default=None)
     run_latest.add_argument("--positions-json", default=None)
     run_latest.add_argument("--watchlist-json", default=None)
+    run_latest.add_argument("--policy-json", default=None)
     run_latest.add_argument("--output-dir", default=None)
 
     run_live = subparsers.add_parser("run-live", help="Run a specific live time window")
@@ -69,6 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_live.add_argument("--watchlist", default=None)
     run_live.add_argument("--positions-json", default=None)
     run_live.add_argument("--watchlist-json", default=None)
+    run_live.add_argument("--policy-json", default=None)
     run_live.add_argument("--output-dir", default=None)
 
     backfill = subparsers.add_parser("backfill", help="Backfill live windows")
@@ -111,17 +123,15 @@ def main() -> None:
     repository = SampleScenarioRepository()
 
     if args.command == "run-demo":
-        positions = (
-            _load_structured_list(args.positions_json)
-            if args.positions_json is not None
-            else _parse_symbol_list(args.positions)
+        positions = _load_structured_list(args.positions_json) or _parse_symbol_list(args.positions)
+        watchlist = _load_structured_list(args.watchlist_json) or _parse_symbol_list(args.watchlist)
+        policy = _load_structured_object(args.policy_json)
+        result = runner.run_demo(
+            args.scenario,
+            portfolio_positions=positions,
+            watchlist=watchlist,
+            operator_policy_config=policy,
         )
-        watchlist = (
-            _load_structured_list(args.watchlist_json)
-            if args.watchlist_json is not None
-            else _parse_symbol_list(args.watchlist)
-        )
-        result = runner.run_demo(args.scenario, portfolio_positions=positions, watchlist=watchlist)
         print(json.dumps({"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2))
         return
 
@@ -154,40 +164,28 @@ def main() -> None:
         return
 
     if args.command == "run-live":
-        positions = (
-            _load_structured_list(args.positions_json)
-            if args.positions_json is not None
-            else _parse_symbol_list(args.positions)
-        )
-        watchlist = (
-            _load_structured_list(args.watchlist_json)
-            if args.watchlist_json is not None
-            else _parse_symbol_list(args.watchlist)
-        )
+        positions = _load_structured_list(args.positions_json) or _parse_symbol_list(args.positions)
+        watchlist = _load_structured_list(args.watchlist_json) or _parse_symbol_list(args.watchlist)
+        policy = _load_structured_object(args.policy_json)
         result = runner.run_live(
             start_at=_parse_datetime(args.start),
             end_at=_parse_datetime(args.end),
             portfolio_positions=positions,
             watchlist=watchlist,
+            operator_policy_config=policy,
         )
         print(json.dumps({"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2))
         return
 
     if args.command == "run-latest":
-        positions = (
-            _load_structured_list(args.positions_json)
-            if args.positions_json is not None
-            else _parse_symbol_list(args.positions)
-        )
-        watchlist = (
-            _load_structured_list(args.watchlist_json)
-            if args.watchlist_json is not None
-            else _parse_symbol_list(args.watchlist)
-        )
+        positions = _load_structured_list(args.positions_json) or _parse_symbol_list(args.positions)
+        watchlist = _load_structured_list(args.watchlist_json) or _parse_symbol_list(args.watchlist)
+        policy = _load_structured_object(args.policy_json)
         result = runner.run_latest(
             lookback_minutes=args.lookback_minutes,
             portfolio_positions=positions,
             watchlist=watchlist,
+            operator_policy_config=policy,
         )
         print(json.dumps({"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2))
         return

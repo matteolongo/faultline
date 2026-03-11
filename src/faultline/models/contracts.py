@@ -215,7 +215,7 @@ class Prediction(BaseModel):
     related_actors: list[str] = Field(default_factory=list)
     affected_assets: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
-    confidence_band: str = "speculative"
+    confidence_band: str = "medium"
     prior_evidence: list[str] = Field(default_factory=list)
     status: str = "pending"
 
@@ -239,7 +239,7 @@ class ScenarioPath(BaseModel):
     name: str
     branch_type: str = "base_case"
     probability: float = Field(default=0.5, ge=0.0, le=1.0)
-    confidence_band: str = "speculative"
+    confidence_band: str = "medium"
     trigger_signals: list[str] = Field(default_factory=list)
     expected_moves: list[str] = Field(default_factory=list)
     market_effects: list[str] = Field(default_factory=list)
@@ -290,6 +290,50 @@ class WatchlistEntry(BaseModel):
     bias: str | None = None
     tags: list[str] = Field(default_factory=list)
     notes: str | None = None
+
+
+class OperatorPolicyConfig(BaseModel):
+    implication_enter_threshold: float = Field(default=0.68, ge=0.0, le=1.0)
+    asymmetric_enter_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
+    negative_avoid_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    portfolio_trim_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
+    portfolio_exit_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
+    watchlist_enter_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
+    watchlist_avoid_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    stage_warning_watch_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    stage_warning_trim_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
+    stage_warning_exit_threshold: float = Field(default=0.82, ge=0.0, le=1.0)
+    timing_trim_threshold: float = Field(default=0.58, ge=0.0, le=1.0)
+    timing_exit_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
+    high_urgency_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+    timing_critical_windows: list[str] = Field(
+        default_factory=lambda: ["immediate", "days to 2 weeks", "days to 4 weeks"]
+    )
+    allow_conflicting_actions: bool = False
+
+    @model_validator(mode="after")
+    def check_threshold_ordering(self) -> "OperatorPolicyConfig":
+        if self.portfolio_exit_threshold < self.portfolio_trim_threshold:
+            raise ValueError(
+                f"portfolio_exit_threshold ({self.portfolio_exit_threshold}) must be >= "
+                f"portfolio_trim_threshold ({self.portfolio_trim_threshold})"
+            )
+        if self.stage_warning_trim_threshold < self.stage_warning_watch_threshold:
+            raise ValueError(
+                f"stage_warning_trim_threshold ({self.stage_warning_trim_threshold}) must be >= "
+                f"stage_warning_watch_threshold ({self.stage_warning_watch_threshold})"
+            )
+        if self.stage_warning_exit_threshold < self.stage_warning_trim_threshold:
+            raise ValueError(
+                f"stage_warning_exit_threshold ({self.stage_warning_exit_threshold}) must be >= "
+                f"stage_warning_trim_threshold ({self.stage_warning_trim_threshold})"
+            )
+        if self.timing_exit_threshold < self.timing_trim_threshold:
+            raise ValueError(
+                f"timing_exit_threshold ({self.timing_exit_threshold}) must be >= "
+                f"timing_trim_threshold ({self.timing_trim_threshold})"
+            )
+        return self
 
 
 class ExitSignal(BaseModel):

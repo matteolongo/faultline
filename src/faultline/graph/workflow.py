@@ -271,6 +271,7 @@ class StrategicSwarmWorkflow:
             state.get("portfolio_positions", []),
             state.get("watchlist", []),
             state.get("stage_transition_warnings", []),
+            state.get("operator_policy_config"),
         )
         portfolio_actions, portfolio_exits, endangered_symbols = self.portfolio_engine.generate(
             state.get("market_implications", []),

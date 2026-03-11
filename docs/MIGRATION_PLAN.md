@@ -20,9 +20,10 @@ The old architecture should be treated as disposable where it creates drag. Pres
 - [x] Slice 2-3: mechanism/stage config and system-first workflow landed.
 - [x] Slice 4: local memory retrieval integrated into execution path.
 - [x] Slice 5: prediction persistence + follow-up outcome scoring landed.
-- [ ] Slice 6: operator storytelling underway (in progress).
+- [~] Slice 6: operator storytelling underway.
 - [x] Added portfolio/watchlist-aware actioning and endangered-symbol reporting.
-- [ ] Added scenario-tree prediction layer with stage-transition warnings and confidence-band boundaries (in progress, current branch).
+- [~] Added scenario-tree prediction layer with stage-transition warnings and confidence-band boundaries (current branch).
+- [~] Added configurable operator decision policy with timing-window "leave-before-too-late" actions (current branch).
 
 ## Operating Rules
 

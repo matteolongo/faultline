@@ -11,6 +11,7 @@ from faultline.models import (
     Force,
     MarketImplication,
     Mechanism,
+    OperatorPolicyConfig,
     PortfolioPosition,
     Prediction,
     RelatedSituation,
@@ -51,15 +52,22 @@ TECH_OPEN_TAGS = {"open-source", "protocol", "portability", "plugin-ecosystem", 
 FINANCIAL_STRESS_TAGS = {"debt", "refinancing", "spread-widening", "market-stress", "cloud-spend"}
 ASYMMETRY_CONFIDENCE_MIN = 0.58
 HIGH_CONFIDENCE_MIN = 0.74
-STAGE_SEQUENCE = [stage["id"] for stage in load_stages()["stages"]]
-
-
-def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) -> dict[str, CalibrationSignal]:
-    return {item.prediction_type: item for item in (calibration_signals or [])}
-
-
-def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) -> dict[str, CalibrationSignal]:
-    return {item.prediction_type: item for item in (calibration_signals or [])}
+STAGE_SEQUENCE = [
+    "latent_tension",
+    "signal_emergence",
+    "pattern_formation",
+    "strategic_positioning",
+    "open_contestation",
+    "repricing",
+    "exhaustion_or_reversal",
+]
+ACTION_PRIORITY = {
+    "watch": 1,
+    "enter": 2,
+    "avoid": 3,
+    "trim": 4,
+    "exit": 5,
+}
 
 
 def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) -> dict[str, CalibrationSignal]:
@@ -430,11 +438,8 @@ class PredictionEngine:
         priors = [
             f"{cluster.agreement_score:.0%} cross-source agreement in current cluster.",
             f"{cluster.cluster_strength:.0%} cluster strength across {len(cluster.source_families)} source families.",
+            f"{snapshot.stage.stage} stage with mechanism {snapshot.mechanisms[0].name}.",
         ]
-        if snapshot.mechanisms:
-            priors.append(f"{snapshot.stage.stage} stage with mechanism {snapshot.mechanisms[0].name}.")
-        else:
-            priors.append(f"{snapshot.stage.stage} stage (no dominant mechanism identified yet).")
         if snapshot.evidence:
             priors.append(f"Lead evidence: {snapshot.evidence[0].title}.")
         return priors
@@ -532,9 +537,7 @@ class PredictionEngine:
                     evidence_refs=priors[:2],
                 )
             )
-        # Skip this warning if the standard next-stage progression already targets exhaustion_or_reversal
-        # (i.e., for the repricing stage), to avoid emitting duplicate (from_stage, to_stage) warnings.
-        if snapshot.stage.stage in {"open_contestation", "repricing"} and next_stage != "exhaustion_or_reversal":
+        if snapshot.stage.stage in {"open_contestation", "repricing"}:
             warnings.append(
                 StageTransitionWarning(
                     from_stage=snapshot.stage.stage,
@@ -703,8 +706,20 @@ class ActionEngine:
         portfolio_positions: list[PortfolioPosition] | None = None,
         watchlist: list[WatchlistEntry] | None = None,
         stage_transition_warnings: list[StageTransitionWarning] | None = None,
+        operator_policy_config: OperatorPolicyConfig | None = None,
     ) -> tuple[list[ActionRecommendation], list[ActionRecommendation], list[str]]:
         calibration_index = _calibration_by_type(calibration_signals)
+        if operator_policy_config is None:
+            policy = OperatorPolicyConfig()
+        elif isinstance(operator_policy_config, OperatorPolicyConfig):
+            policy = operator_policy_config
+        elif isinstance(operator_policy_config, dict):
+            policy = OperatorPolicyConfig.model_validate(operator_policy_config)
+        else:
+            raise TypeError(
+                f"operator_policy_config must be None, OperatorPolicyConfig, or dict, "
+                f"got {type(operator_policy_config)!r}"
+            )
         portfolio_positions = portfolio_positions or []
         watchlist = watchlist or []
         stage_transition_warnings = stage_transition_warnings or []
@@ -713,31 +728,16 @@ class ActionEngine:
         endangered_symbols: list[str] = []
         for implication in implications:
             conviction = self._conviction_for(implication, calibration_index)
-            if implication.thesis_type == "asymmetric_opportunity":
-                actions.append(
-                    ActionRecommendation(
-                        action="watch" if conviction < 0.72 else "enter",
-                        target=implication.target,
-                        rationale=f"{implication.rationale} Calibrated conviction={conviction:.2f}.",
-                        confidence=conviction,
-                        urgency="medium" if conviction < 0.8 else "high",
-                        thesis_type=implication.thesis_type,
-                    )
+            actions.append(
+                ActionRecommendation(
+                    action=self._implication_action(implication, conviction, policy),
+                    target=implication.target,
+                    rationale=f"{implication.rationale} Calibrated conviction={conviction:.2f}.",
+                    confidence=conviction,
+                    urgency=self._urgency(conviction, policy),
+                    thesis_type=implication.thesis_type,
                 )
-            else:
-                action = "avoid" if implication.direction == "negative" and conviction < 0.68 else "enter"
-                if implication.direction == "negative" and conviction < 0.6:
-                    action = "watch"
-                actions.append(
-                    ActionRecommendation(
-                        action=action,
-                        target=implication.target,
-                        rationale=f"{implication.rationale} Calibrated conviction={conviction:.2f}.",
-                        confidence=conviction,
-                        urgency="high" if conviction >= 0.72 else "medium",
-                        thesis_type=implication.thesis_type,
-                    )
-                )
+            )
             exits.append(
                 ActionRecommendation(
                     action="exit" if implication.direction == "negative" else "trim",
@@ -758,19 +758,36 @@ class ActionEngine:
                     target=snapshot.system_under_pressure,
                     rationale="The structure matters, but the market translation is still weak.",
                     confidence=0.4,
+                    urgency="low",
                 )
             )
-        portfolio_actions = self._portfolio_actions(portfolio_positions, implications, calibration_index)
+        portfolio_actions = self._portfolio_actions(portfolio_positions, implications, calibration_index, policy)
         actions.extend(portfolio_actions)
         exits.extend([item for item in portfolio_actions if item.action in {"trim", "exit"}])
-        watchlist_actions = self._watchlist_actions(watchlist, implications, calibration_index)
+        watchlist_actions = self._watchlist_actions(watchlist, implications, calibration_index, policy)
         actions.extend(watchlist_actions)
         exits.extend([item for item in watchlist_actions if item.action in {"avoid", "trim", "exit"}])
-        warning_actions, warning_exits = self._warning_actions(snapshot, stage_transition_warnings)
+        warning_actions, warning_exits = self._warning_actions(snapshot, stage_transition_warnings, policy)
         actions.extend(warning_actions)
         exits.extend(warning_exits)
+        timing_actions, timing_exits = self._timing_actions(
+            snapshot=snapshot,
+            positions=portfolio_positions,
+            watchlist=watchlist,
+            implications=implications,
+            predictions=predictions,
+            warnings=stage_transition_warnings,
+            calibration_index=calibration_index,
+            policy=policy,
+        )
+        actions.extend(timing_actions)
+        exits.extend(timing_exits)
         endangered_symbols.extend(self._endangered_symbols(portfolio_positions, implications, calibration_index))
-        return actions, exits, sorted(set(endangered_symbols))
+        return (
+            self._resolve_conflicts(actions, allow_conflicts=policy.allow_conflicting_actions),
+            self._resolve_conflicts(exits, allow_conflicts=policy.allow_conflicting_actions),
+            sorted(set(endangered_symbols)),
+        )
 
     def _conviction_for(
         self,
@@ -789,6 +806,7 @@ class ActionEngine:
         positions: list[PortfolioPosition],
         implications: list[MarketImplication],
         calibration_index: dict[str, CalibrationSignal],
+        policy: OperatorPolicyConfig,
     ) -> list[ActionRecommendation]:
         actions: list[ActionRecommendation] = []
         for position in positions:
@@ -807,7 +825,7 @@ class ActionEngine:
                 ),
                 default=0.0,
             )
-            if worst_negative >= 0.72:
+            if worst_negative >= policy.portfolio_exit_threshold:
                 actions.append(
                     ActionRecommendation(
                         action="exit",
@@ -818,14 +836,14 @@ class ActionEngine:
                         thesis_type="portfolio_position",
                     )
                 )
-            elif worst_negative >= 0.55:
+            elif worst_negative >= policy.portfolio_trim_threshold:
                 actions.append(
                     ActionRecommendation(
                         action="trim",
                         target=position.symbol,
                         rationale="Held symbol is exposed to medium-conviction downside pressure.",
                         confidence=worst_negative,
-                        urgency="medium",
+                        urgency=self._urgency(worst_negative, policy),
                         thesis_type="portfolio_position",
                     )
                 )
@@ -836,6 +854,7 @@ class ActionEngine:
         watchlist: list[WatchlistEntry],
         implications: list[MarketImplication],
         calibration_index: dict[str, CalibrationSignal],
+        policy: OperatorPolicyConfig,
     ) -> list[ActionRecommendation]:
         actions: list[ActionRecommendation] = []
         for item in watchlist:
@@ -845,16 +864,16 @@ class ActionEngine:
             best = max(relevant, key=lambda imp: self._conviction_for(imp, calibration_index))
             conviction = self._conviction_for(best, calibration_index)
             if best.direction == "positive":
-                action = "enter" if conviction >= 0.72 else "watch"
+                action = "enter" if conviction >= policy.watchlist_enter_threshold else "watch"
             else:
-                action = "avoid" if conviction >= 0.65 else "watch"
+                action = "avoid" if conviction >= policy.watchlist_avoid_threshold else "watch"
             actions.append(
                 ActionRecommendation(
                     action=action,
                     target=item.symbol,
                     rationale=f"Watchlist symbol mapped to {best.target} ({best.direction}) with conviction {conviction:.2f}.",
                     confidence=conviction,
-                    urgency="medium" if conviction < 0.8 else "high",
+                    urgency=self._urgency(conviction, policy),
                     thesis_type="watchlist_symbol",
                 )
             )
@@ -893,13 +912,19 @@ class ActionEngine:
         self,
         snapshot: SituationSnapshot,
         warnings: list[StageTransitionWarning],
+        policy: OperatorPolicyConfig,
     ) -> tuple[list[ActionRecommendation], list[ActionRecommendation]]:
         actions: list[ActionRecommendation] = []
         exits: list[ActionRecommendation] = []
         for warning in warnings:
-            if warning.probability < 0.6:
+            if warning.probability < policy.stage_warning_watch_threshold:
                 continue
-            action = "trim" if warning.probability >= 0.72 else "watch"
+            if warning.probability >= policy.stage_warning_exit_threshold:
+                action = "exit"
+            elif warning.probability >= policy.stage_warning_trim_threshold:
+                action = "trim"
+            else:
+                action = "watch"
             recommendation = ActionRecommendation(
                 action=action,
                 target=snapshot.system_under_pressure,
@@ -908,31 +933,170 @@ class ActionEngine:
                     f"Trigger: {warning.trigger}"
                 ),
                 confidence=warning.probability,
-                urgency="high" if warning.probability >= 0.72 else "medium",
+                urgency=self._urgency(warning.probability, policy),
                 thesis_type="stage_transition_warning",
             )
             actions.append(recommendation)
-            if action == "trim":
+            if action in {"trim", "exit"}:
                 exits.append(
                     ActionRecommendation(
-                        action="trim",
+                        action=action,
                         target=snapshot.system_under_pressure,
                         rationale=f"Reduce gross exposure before {warning.to_stage} risk fully prices in.",
                         confidence=max(0.35, warning.probability - 0.05),
-                        urgency="high",
+                        urgency=self._urgency(warning.probability, policy),
                         thesis_type="stage_transition_warning",
                     )
                 )
         return actions, exits
 
-    def _conviction_for(
+    def _timing_actions(
+        self,
+        *,
+        snapshot: SituationSnapshot,
+        positions: list[PortfolioPosition],
+        watchlist: list[WatchlistEntry],
+        implications: list[MarketImplication],
+        predictions: list[Prediction],
+        warnings: list[StageTransitionWarning],
+        calibration_index: dict[str, CalibrationSignal],
+        policy: OperatorPolicyConfig,
+    ) -> tuple[list[ActionRecommendation], list[ActionRecommendation]]:
+        pressure = self._timing_pressure(predictions, warnings, policy)
+        if pressure < policy.timing_trim_threshold:
+            return [], []
+        actions: list[ActionRecommendation] = []
+        exits: list[ActionRecommendation] = []
+        for position in positions:
+            relevant_negative = any(
+                item.direction == "negative"
+                and self._matches(item.target, position.symbol, position.tags, default_generic=True)
+                for item in implications
+            )
+            if not relevant_negative or position.direction != "long":
+                continue
+            action = "exit" if pressure >= policy.timing_exit_threshold else "trim"
+            recommendation = ActionRecommendation(
+                action=action,
+                target=position.symbol,
+                rationale=(
+                    f"Timing window is closing (pressure={pressure:.2f}); leave before consensus fully reprices "
+                    "the downside."
+                ),
+                confidence=pressure,
+                urgency=self._urgency(pressure, policy),
+                thesis_type="timing_window_policy",
+            )
+            actions.append(recommendation)
+            exits.append(recommendation)
+        for item in watchlist:
+            relevant = [imp for imp in implications if self._matches(imp.target, item.symbol, item.tags)]
+            if not relevant:
+                continue
+            best = max(relevant, key=lambda imp: self._conviction_for(imp, calibration_index))
+            conviction = self._conviction_for(best, calibration_index)
+            if best.direction == "negative":
+                action = "avoid"
+            elif conviction >= policy.watchlist_enter_threshold and pressure >= policy.timing_exit_threshold:
+                action = "enter"
+            else:
+                action = "watch"
+            recommendation = ActionRecommendation(
+                action=action,
+                target=item.symbol,
+                rationale=(
+                    f"Timing-window policy engaged (pressure={pressure:.2f}) with {best.direction} implication "
+                    f"conviction={conviction:.2f}."
+                ),
+                confidence=max(pressure, conviction),
+                urgency=self._urgency(max(pressure, conviction), policy),
+                thesis_type="timing_window_policy",
+            )
+            actions.append(recommendation)
+            if action in {"trim", "exit", "avoid"}:
+                exits.append(recommendation)
+        if not actions:
+            actions.append(
+                ActionRecommendation(
+                    action="watch",
+                    target=snapshot.system_under_pressure,
+                    rationale=f"Timing pressure is elevated ({pressure:.2f}); monitor for rapid stage transition.",
+                    confidence=pressure,
+                    urgency=self._urgency(pressure, policy),
+                    thesis_type="timing_window_policy",
+                )
+            )
+        return actions, exits
+
+    def _timing_pressure(
+        self,
+        predictions: list[Prediction],
+        warnings: list[StageTransitionWarning],
+        policy: OperatorPolicyConfig,
+    ) -> float:
+        timing_prediction = max(
+            (
+                item.confidence
+                for item in predictions
+                if item.prediction_type == "timing_window" and self._is_critical_window(item.time_horizon, policy)
+            ),
+            default=0.0,
+        )
+        stage_warning = max(
+            (item.probability for item in warnings if self._is_warning_soon(item.lead_time)),
+            default=0.0,
+        )
+        return max(timing_prediction, stage_warning)
+
+    def _is_critical_window(self, horizon: str, policy: OperatorPolicyConfig) -> bool:
+        value = horizon.lower()
+        return any(token.lower() in value for token in policy.timing_critical_windows)
+
+    def _is_warning_soon(self, lead_time: str) -> bool:
+        value = lead_time.lower()
+        if "days" in value:
+            return True
+        return any(token in value for token in {"1-2 weeks", "1-3 weeks", "1-4 weeks", "2-4 weeks"})
+
+    def _implication_action(
         self,
         implication: MarketImplication,
-        calibration_index: dict[str, CalibrationSignal],
-    ) -> float:
-        relevant_type = "asset_repricing"
-        signal = calibration_index.get(relevant_type)
-        if signal is None or signal.sample_size == 0:
-            return implication.confidence
-        adjustment = (signal.confirmed_rate - signal.unconfirmed_rate) * 0.1 + signal.average_confidence_delta * 0.35
-        return max(0.05, min(0.95, implication.confidence + adjustment))
+        conviction: float,
+        policy: OperatorPolicyConfig,
+    ) -> str:
+        if implication.direction == "negative":
+            return "avoid" if conviction >= policy.negative_avoid_threshold else "watch"
+        threshold = (
+            policy.asymmetric_enter_threshold
+            if implication.thesis_type == "asymmetric_opportunity"
+            else policy.implication_enter_threshold
+        )
+        return "enter" if conviction >= threshold else "watch"
+
+    def _urgency(self, confidence: float, policy: OperatorPolicyConfig) -> str:
+        if confidence >= policy.high_urgency_threshold:
+            return "high"
+        if confidence >= 0.55:
+            return "medium"
+        return "low"
+
+    def _resolve_conflicts(
+        self,
+        items: list[ActionRecommendation],
+        *,
+        allow_conflicts: bool,
+    ) -> list[ActionRecommendation]:
+        if allow_conflicts:
+            return items
+        selected: dict[str, ActionRecommendation] = {}
+        for item in items:
+            key = item.target.lower()
+            existing = selected.get(key)
+            if existing is None:
+                selected[key] = item
+                continue
+            existing_rank = (ACTION_PRIORITY.get(existing.action, 0), existing.confidence)
+            new_rank = (ACTION_PRIORITY.get(item.action, 0), item.confidence)
+            if new_rank > existing_rank:
+                selected[key] = item
+        return sorted(selected.values(), key=lambda item: item.confidence, reverse=True)

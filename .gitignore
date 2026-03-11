@@ -16,6 +16,7 @@ build/
 .coverage
 coverage.xml
 htmlcov/
+tmp/
 
 # Temporary files
 tmp/
