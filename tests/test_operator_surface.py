@@ -39,7 +39,7 @@ def test_operator_surface_handles_monitor_only_and_missing_report(tmp_path) -> N
             "executive_summary": "Summary",
             "monitor_only_reason": "Weak agreement",
             "system_topology": "Topology",
-            "opportunity_map": [],
+            "market_implications": [],
         },
         "selected_cluster": {
             "cluster_id": "cluster-1",

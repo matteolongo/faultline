@@ -27,7 +27,7 @@ def summarize_final_state(final_state: dict[str, Any]) -> dict[str, Any]:
         "system_topology": report.get("system_topology"),
         "stage": report.get("stage"),
         "calibrated_conviction": report.get("calibrated_conviction"),
-        "opportunity_count": len(report.get("market_implications") or report.get("opportunity_map") or []),
+        "opportunity_count": len(report.get("market_implications") or []),
         "cluster_id": cluster.get("cluster_id"),
         "cluster_title": cluster.get("canonical_title"),
         "cluster_strength": cluster.get("cluster_strength"),

@@ -482,12 +482,6 @@ class FinalReport(BaseModel):
     detected_scenario: ScenarioDetection | None = None
     equity_opportunities: list[EquityOpportunity] = Field(default_factory=list)
 
-    # Legacy fields retained temporarily while old modules are phased out.
-    fragility_map: list[str] = Field(default_factory=list)
-    ripple_map: list[str] = Field(default_factory=list)
-    opportunity_map: list[str] = Field(default_factory=list)
-    execution_recommendations: list[str] = Field(default_factory=list)
-
 
 class PublishedReport(BaseModel):
     report_id: str
