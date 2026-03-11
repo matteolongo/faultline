@@ -17,6 +17,9 @@ build/
 coverage.xml
 htmlcov/
 
+# Temporary files
+tmp/
+
 # Environment & secrets
 .env
 .env.local
@@ -39,5 +42,5 @@ notebooks/outputs/
 # VSCode (settings committed, but workspace-local overrides excluded)
 .vscode/*.code-workspace
 
-# Test artifacts
+# Temp files and test artifacts
 tmp/

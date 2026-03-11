@@ -58,6 +58,10 @@ def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) ->
     return {item.prediction_type: item for item in (calibration_signals or [])}
 
 
+def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) -> dict[str, CalibrationSignal]:
+    return {item.prediction_type: item for item in (calibration_signals or [])}
+
+
 class MechanismAnalyzer:
     def __init__(self) -> None:
         self.config = load_mechanisms()["mechanisms"]
@@ -916,3 +920,15 @@ class ActionEngine:
                     )
                 )
         return actions, exits
+
+    def _conviction_for(
+        self,
+        implication: MarketImplication,
+        calibration_index: dict[str, CalibrationSignal],
+    ) -> float:
+        relevant_type = "asset_repricing"
+        signal = calibration_index.get(relevant_type)
+        if signal is None or signal.sample_size == 0:
+            return implication.confidence
+        adjustment = (signal.confirmed_rate - signal.unconfirmed_rate) * 0.1 + signal.average_confidence_delta * 0.35
+        return max(0.05, min(0.95, implication.confidence + adjustment))
