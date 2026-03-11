@@ -111,8 +111,16 @@ def main() -> None:
     repository = SampleScenarioRepository()
 
     if args.command == "run-demo":
-        positions = _load_structured_list(args.positions_json) or _parse_symbol_list(args.positions)
-        watchlist = _load_structured_list(args.watchlist_json) or _parse_symbol_list(args.watchlist)
+        positions = (
+            _load_structured_list(args.positions_json)
+            if args.positions_json is not None
+            else _parse_symbol_list(args.positions)
+        )
+        watchlist = (
+            _load_structured_list(args.watchlist_json)
+            if args.watchlist_json is not None
+            else _parse_symbol_list(args.watchlist)
+        )
         result = runner.run_demo(args.scenario, portfolio_positions=positions, watchlist=watchlist)
         print(json.dumps({"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2))
         return
@@ -146,8 +154,16 @@ def main() -> None:
         return
 
     if args.command == "run-live":
-        positions = _load_structured_list(args.positions_json) or _parse_symbol_list(args.positions)
-        watchlist = _load_structured_list(args.watchlist_json) or _parse_symbol_list(args.watchlist)
+        positions = (
+            _load_structured_list(args.positions_json)
+            if args.positions_json is not None
+            else _parse_symbol_list(args.positions)
+        )
+        watchlist = (
+            _load_structured_list(args.watchlist_json)
+            if args.watchlist_json is not None
+            else _parse_symbol_list(args.watchlist)
+        )
         result = runner.run_live(
             start_at=_parse_datetime(args.start),
             end_at=_parse_datetime(args.end),
@@ -158,8 +174,16 @@ def main() -> None:
         return
 
     if args.command == "run-latest":
-        positions = _load_structured_list(args.positions_json) or _parse_symbol_list(args.positions)
-        watchlist = _load_structured_list(args.watchlist_json) or _parse_symbol_list(args.watchlist)
+        positions = (
+            _load_structured_list(args.positions_json)
+            if args.positions_json is not None
+            else _parse_symbol_list(args.positions)
+        )
+        watchlist = (
+            _load_structured_list(args.watchlist_json)
+            if args.watchlist_json is not None
+            else _parse_symbol_list(args.watchlist)
+        )
         result = runner.run_latest(
             lookback_minutes=args.lookback_minutes,
             portfolio_positions=positions,
