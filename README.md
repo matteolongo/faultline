@@ -152,6 +152,7 @@ docs/
 
 ```bash
 pip install -e '.[dev]'
+ruff check .
 ruff format --check src/ tests/ docs/
 pytest -q
 ```
