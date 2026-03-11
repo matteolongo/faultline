@@ -311,30 +311,6 @@ class OperatorPolicyConfig(BaseModel):
     )
     allow_conflicting_actions: bool = False
 
-    @model_validator(mode="after")
-    def check_threshold_ordering(self) -> "OperatorPolicyConfig":
-        if self.portfolio_exit_threshold < self.portfolio_trim_threshold:
-            raise ValueError(
-                f"portfolio_exit_threshold ({self.portfolio_exit_threshold}) must be >= "
-                f"portfolio_trim_threshold ({self.portfolio_trim_threshold})"
-            )
-        if self.stage_warning_trim_threshold < self.stage_warning_watch_threshold:
-            raise ValueError(
-                f"stage_warning_trim_threshold ({self.stage_warning_trim_threshold}) must be >= "
-                f"stage_warning_watch_threshold ({self.stage_warning_watch_threshold})"
-            )
-        if self.stage_warning_exit_threshold < self.stage_warning_trim_threshold:
-            raise ValueError(
-                f"stage_warning_exit_threshold ({self.stage_warning_exit_threshold}) must be >= "
-                f"stage_warning_trim_threshold ({self.stage_warning_trim_threshold})"
-            )
-        if self.timing_exit_threshold < self.timing_trim_threshold:
-            raise ValueError(
-                f"timing_exit_threshold ({self.timing_exit_threshold}) must be >= "
-                f"timing_trim_threshold ({self.timing_trim_threshold})"
-            )
-        return self
-
 
 class ExitSignal(BaseModel):
     target: str

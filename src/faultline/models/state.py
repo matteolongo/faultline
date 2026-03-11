@@ -32,6 +32,7 @@ class FaultlineInputSchema(TypedDict, total=False):
     window_end: str
     portfolio_positions: list[PortfolioPosition]
     watchlist: list[WatchlistEntry]
+    operator_policy_config: OperatorPolicyConfig
 
 
 class FaultlineState(TypedDict, total=False):

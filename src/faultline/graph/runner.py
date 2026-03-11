@@ -73,8 +73,13 @@ class StrategicSwarmRunner:
         portfolio_positions: list[PortfolioPosition | dict] | None = None,
         watchlist: list[WatchlistEntry | dict] | None = None,
         operator_policy_config: OperatorPolicyConfig | dict | None = None,
+        auto_followup: bool = False,
+        followup_min_run_age_minutes: int = 60,
+        followup_limit_runs: int = 20,
+        followup_include_demo: bool = False,
+        followup_rescore_existing: bool = False,
     ) -> dict:
-        return self._run(
+        result = self._run(
             initial_state={
                 "run_mode": "live",
                 "window_start": start_at.isoformat(),
@@ -84,6 +89,16 @@ class StrategicSwarmRunner:
                 "operator_policy_config": operator_policy_config,
             }
         )
+        if auto_followup:
+            result["followup"] = self.auto_score_followups(
+                start_at=start_at,
+                end_at=end_at,
+                min_run_age_minutes=followup_min_run_age_minutes,
+                limit_runs=followup_limit_runs,
+                include_demo=followup_include_demo,
+                rescore_existing=followup_rescore_existing,
+            )
+        return result
 
     def run_latest(
         self,
@@ -92,6 +107,11 @@ class StrategicSwarmRunner:
         portfolio_positions: list[PortfolioPosition | dict] | None = None,
         watchlist: list[WatchlistEntry | dict] | None = None,
         operator_policy_config: OperatorPolicyConfig | dict | None = None,
+        auto_followup: bool = False,
+        followup_min_run_age_minutes: int = 60,
+        followup_limit_runs: int = 20,
+        followup_include_demo: bool = False,
+        followup_rescore_existing: bool = False,
     ) -> dict:
         lookback = lookback_minutes or int(os.getenv("FAULTLINE_DEFAULT_LOOKBACK_MINUTES", "60"))
         end_at = datetime.now(UTC)
@@ -102,6 +122,11 @@ class StrategicSwarmRunner:
             portfolio_positions=portfolio_positions,
             watchlist=watchlist,
             operator_policy_config=operator_policy_config,
+            auto_followup=auto_followup,
+            followup_min_run_age_minutes=followup_min_run_age_minutes,
+            followup_limit_runs=followup_limit_runs,
+            followup_include_demo=followup_include_demo,
+            followup_rescore_existing=followup_rescore_existing,
         )
 
     def ingest_window(self, *, start_at: datetime, end_at: datetime) -> dict:
@@ -191,17 +216,69 @@ class StrategicSwarmRunner:
         outcomes = self.outcome_evaluator.score(predictions, signals)
         self.store.save_outcome_records(run_id=run_id, outcomes=outcomes)
         summary = self._summarize_outcomes(outcomes)
-        run_dir = self._resolve_run_dir(run_id)
-        if run_dir is not None:
-            write_json(run_dir / "outcomes.json", {"run_id": run_id, "summary": summary, "outcomes": outcomes})
-            write_text(
-                run_dir / "outcomes.md", render_outcome_markdown(run_id=run_id, outcomes=outcomes, summary=summary)
-            )
+        self._persist_outcomes(run_id=run_id, outcomes=outcomes, summary=summary)
         return {
             "run_id": run_id,
             "followup_signal_count": len(signals),
             "outcomes": [item.model_dump(mode="json") for item in outcomes],
             "summary": summary,
+        }
+
+    def auto_score_followups(
+        self,
+        *,
+        start_at: datetime,
+        end_at: datetime,
+        min_run_age_minutes: int = 60,
+        limit_runs: int = 20,
+        include_demo: bool = False,
+        rescore_existing: bool = False,
+    ) -> dict:
+        signals = self.store.load_raw_signals_for_window(start_at, end_at)
+        if not signals:
+            return {
+                "window_start": start_at.isoformat(),
+                "window_end": end_at.isoformat(),
+                "followup_signal_count": 0,
+                "candidate_run_count": 0,
+                "processed_run_count": 0,
+                "processed_runs": [],
+                "calibration_signal_count": len(self.store.load_calibration_signals()),
+            }
+        cutoff = end_at - timedelta(minutes=min_run_age_minutes)
+        candidates = self.store.list_runs_for_followup(
+            cutoff_time=cutoff,
+            limit=limit_runs,
+            include_demo=include_demo,
+            include_scored=rescore_existing,
+        )
+        processed_runs: list[dict] = []
+        for item in candidates:
+            run_id = item["run_id"]
+            predictions = self.store.load_predictions_for_run(run_id)
+            if not predictions:
+                continue
+            outcomes = self.outcome_evaluator.score(predictions, signals)
+            self.store.save_outcome_records(run_id=run_id, outcomes=outcomes)
+            summary = self._summarize_outcomes(outcomes)
+            self._persist_outcomes(run_id=run_id, outcomes=outcomes, summary=summary)
+            processed_runs.append(
+                {
+                    "run_id": run_id,
+                    "run_mode": item["run_mode"],
+                    "scenario_id": item["scenario_id"],
+                    "summary": summary,
+                    "prediction_count": len(predictions),
+                }
+            )
+        return {
+            "window_start": start_at.isoformat(),
+            "window_end": end_at.isoformat(),
+            "followup_signal_count": len(signals),
+            "candidate_run_count": len(candidates),
+            "processed_run_count": len(processed_runs),
+            "processed_runs": processed_runs,
+            "calibration_signal_count": len(self.store.load_calibration_signals()),
         }
 
     def list_signals(self, *, limit: int = 25, provider_name: str | None = None) -> list[dict]:
@@ -306,6 +383,13 @@ class StrategicSwarmRunner:
         if candidates:
             return candidates[0]
         return None
+
+    def _persist_outcomes(self, *, run_id: str, outcomes: list[OutcomeRecord], summary: dict[str, int]) -> None:
+        run_dir = self._resolve_run_dir(run_id)
+        if run_dir is None:
+            return
+        write_json(run_dir / "outcomes.json", {"run_id": run_id, "summary": summary, "outcomes": outcomes})
+        write_text(run_dir / "outcomes.md", render_outcome_markdown(run_id=run_id, outcomes=outcomes, summary=summary))
 
 
 def default_goldset() -> list[str]:

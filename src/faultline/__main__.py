@@ -71,6 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_latest.add_argument("--positions-json", default=None)
     run_latest.add_argument("--watchlist-json", default=None)
     run_latest.add_argument("--policy-json", default=None)
+    run_latest.add_argument("--auto-followup", action="store_true")
+    run_latest.add_argument("--followup-min-age-minutes", type=int, default=60)
+    run_latest.add_argument("--followup-limit-runs", type=int, default=20)
+    run_latest.add_argument("--followup-include-demo", action="store_true")
+    run_latest.add_argument("--followup-rescore-existing", action="store_true")
     run_latest.add_argument("--output-dir", default=None)
 
     run_live = subparsers.add_parser("run-live", help="Run a specific live time window")
@@ -81,6 +86,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_live.add_argument("--positions-json", default=None)
     run_live.add_argument("--watchlist-json", default=None)
     run_live.add_argument("--policy-json", default=None)
+    run_live.add_argument("--auto-followup", action="store_true")
+    run_live.add_argument("--followup-min-age-minutes", type=int, default=60)
+    run_live.add_argument("--followup-limit-runs", type=int, default=20)
+    run_live.add_argument("--followup-include-demo", action="store_true")
+    run_live.add_argument("--followup-rescore-existing", action="store_true")
     run_live.add_argument("--output-dir", default=None)
 
     backfill = subparsers.add_parser("backfill", help="Backfill live windows")
@@ -100,6 +110,18 @@ def build_parser() -> argparse.ArgumentParser:
     score_followup.add_argument("--start", required=True)
     score_followup.add_argument("--end", required=True)
     score_followup.add_argument("--output-dir", default=None)
+
+    auto_followup = subparsers.add_parser(
+        "auto-followup",
+        help="Auto-score eligible prior runs using follow-up signals from a time window",
+    )
+    auto_followup.add_argument("--start", required=True)
+    auto_followup.add_argument("--end", required=True)
+    auto_followup.add_argument("--min-run-age-minutes", type=int, default=60)
+    auto_followup.add_argument("--limit-runs", type=int, default=20)
+    auto_followup.add_argument("--include-demo", action="store_true")
+    auto_followup.add_argument("--rescore-existing", action="store_true")
+    auto_followup.add_argument("--output-dir", default=None)
 
     signals = subparsers.add_parser("list-signals", help="List persisted raw signals")
     signals.add_argument("--limit", type=int, default=25)
@@ -173,8 +195,16 @@ def main() -> None:
             portfolio_positions=positions,
             watchlist=watchlist,
             operator_policy_config=policy,
+            auto_followup=args.auto_followup,
+            followup_min_run_age_minutes=args.followup_min_age_minutes,
+            followup_limit_runs=args.followup_limit_runs,
+            followup_include_demo=args.followup_include_demo,
+            followup_rescore_existing=args.followup_rescore_existing,
         )
-        print(json.dumps({"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2))
+        payload = {"run_id": result["run_id"], "run_dir": result["run_dir"]}
+        if result.get("followup"):
+            payload["followup"] = result["followup"]
+        print(json.dumps(payload, indent=2))
         return
 
     if args.command == "run-latest":
@@ -186,8 +216,16 @@ def main() -> None:
             portfolio_positions=positions,
             watchlist=watchlist,
             operator_policy_config=policy,
+            auto_followup=args.auto_followup,
+            followup_min_run_age_minutes=args.followup_min_age_minutes,
+            followup_limit_runs=args.followup_limit_runs,
+            followup_include_demo=args.followup_include_demo,
+            followup_rescore_existing=args.followup_rescore_existing,
         )
-        print(json.dumps({"run_id": result["run_id"], "run_dir": result["run_dir"]}, indent=2))
+        payload = {"run_id": result["run_id"], "run_dir": result["run_dir"]}
+        if result.get("followup"):
+            payload["followup"] = result["followup"]
+        print(json.dumps(payload, indent=2))
         return
 
     if args.command == "backfill":
@@ -218,6 +256,18 @@ def main() -> None:
             run_id=args.run_id,
             start_at=_parse_datetime(args.start),
             end_at=_parse_datetime(args.end),
+        )
+        print(json.dumps(result, indent=2))
+        return
+
+    if args.command == "auto-followup":
+        result = runner.auto_score_followups(
+            start_at=_parse_datetime(args.start),
+            end_at=_parse_datetime(args.end),
+            min_run_age_minutes=args.min_run_age_minutes,
+            limit_runs=args.limit_runs,
+            include_demo=args.include_demo,
+            rescore_existing=args.rescore_existing,
         )
         print(json.dumps(result, indent=2))
         return

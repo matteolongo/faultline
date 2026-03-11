@@ -709,17 +709,7 @@ class ActionEngine:
         operator_policy_config: OperatorPolicyConfig | None = None,
     ) -> tuple[list[ActionRecommendation], list[ActionRecommendation], list[str]]:
         calibration_index = _calibration_by_type(calibration_signals)
-        if operator_policy_config is None:
-            policy = OperatorPolicyConfig()
-        elif isinstance(operator_policy_config, OperatorPolicyConfig):
-            policy = operator_policy_config
-        elif isinstance(operator_policy_config, dict):
-            policy = OperatorPolicyConfig.model_validate(operator_policy_config)
-        else:
-            raise TypeError(
-                f"operator_policy_config must be None, OperatorPolicyConfig, or dict, "
-                f"got {type(operator_policy_config)!r}"
-            )
+        policy = operator_policy_config or OperatorPolicyConfig()
         portfolio_positions = portfolio_positions or []
         watchlist = watchlist or []
         stage_transition_warnings = stage_transition_warnings or []
