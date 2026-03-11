@@ -7,6 +7,7 @@ from typing_extensions import TypedDict
 from faultline.models.contracts import (
     ActionRecommendation,
     CalibrationSignal,
+    ChatIntakeSession,
     EventCluster,
     FinalReport,
     MarketImplication,
@@ -17,10 +18,12 @@ from faultline.models.contracts import (
     ProviderHealthStatus,
     RawSignal,
     RelatedSituation,
+    ResearchBrief,
     ScenarioPath,
     SignalEvent,
     SituationSnapshot,
     StageTransitionWarning,
+    TopicPrompt,
     WatchlistEntry,
 )
 
@@ -33,6 +36,10 @@ class FaultlineInputSchema(TypedDict, total=False):
     portfolio_positions: list[PortfolioPosition]
     watchlist: list[WatchlistEntry]
     operator_policy_config: OperatorPolicyConfig
+    topic_prompt: TopicPrompt
+    research_brief: ResearchBrief
+    chat_intake_session: ChatIntakeSession
+    retrieval_questions: list[str]
 
 
 class FaultlineState(TypedDict, total=False):
@@ -43,6 +50,10 @@ class FaultlineState(TypedDict, total=False):
     portfolio_positions: list[PortfolioPosition]
     watchlist: list[WatchlistEntry]
     operator_policy_config: OperatorPolicyConfig
+    topic_prompt: TopicPrompt
+    research_brief: ResearchBrief
+    chat_intake_session: ChatIntakeSession
+    retrieval_questions: list[str]
     raw_signals: list[RawSignal]
     normalized_events: list[SignalEvent]
     event_clusters: list[EventCluster]

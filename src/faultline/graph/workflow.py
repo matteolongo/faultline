@@ -96,8 +96,8 @@ class StrategicSwarmWorkflow:
         return graph.compile()
 
     def ingest_signals(self, state: FaultlineState) -> FaultlineState:
-        if state.get("raw_signals"):
-            return {"provenance": [f"Loaded {len(state['raw_signals'])} raw signals into the workflow."]}
+        if "raw_signals" in state:
+            return {"provenance": [*state.get("provenance", []), f"Loaded {len(state['raw_signals'])} raw signals into the workflow."]}
 
         if state.get("run_mode") == "demo":
             scenario_id = state.get("scenario_id") or "open_model_breakout"
@@ -283,6 +283,17 @@ class StrategicSwarmWorkflow:
         cluster = state.get("selected_cluster")
         if snapshot is None or cluster is None:
             report = self.report_builder.empty_report(state.get("provenance", []))
+            topic_prompt = state.get("topic_prompt")
+            research_brief = state.get("research_brief")
+            if topic_prompt is not None:
+                report.topic_prompt = topic_prompt.topic if hasattr(topic_prompt, "topic") else topic_prompt.get("topic", "")
+            if research_brief is not None:
+                assumptions = (
+                    research_brief.assumptions if hasattr(research_brief, "assumptions") else research_brief.get("assumptions", [])
+                )
+                report.intake_assumptions = assumptions
+                report.deep_dive_objective = self.report_builder._deep_dive_objective(research_brief)  # type: ignore[arg-type]
+            report.retrieval_questions = state.get("retrieval_questions", [])
             return {
                 "final_report": report,
                 "diagnostics": {**state.get("diagnostics", {}), "publish_decision": report.publication_status},
@@ -300,6 +311,9 @@ class StrategicSwarmWorkflow:
             exits=state.get("exit_signals", []),
             endangered_symbols=state.get("endangered_symbols", []),
             provenance=state.get("provenance", []),
+            topic_prompt=state.get("topic_prompt"),
+            research_brief=state.get("research_brief"),
+            retrieval_questions=state.get("retrieval_questions", []),
         )
         return {
             "final_report": report,

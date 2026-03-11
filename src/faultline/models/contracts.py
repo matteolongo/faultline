@@ -292,6 +292,46 @@ class WatchlistEntry(BaseModel):
     notes: str | None = None
 
 
+class TopicPrompt(BaseModel):
+    topic: str
+    thesis: str | None = None
+
+
+class ResearchBrief(BaseModel):
+    original_topic: str
+    normalized_topic: str = ""
+    system_under_study: str = ""
+    analysis_goal: str = ""
+    geographic_scope: str = ""
+    time_horizon: str = ""
+    target_universe: str = ""
+    portfolio_focus: str = "broader_market"
+    positions: list[PortfolioPosition] = Field(default_factory=list)
+    watchlist: list[WatchlistEntry] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list)
+
+
+class ChatIntakeTurn(BaseModel):
+    question_id: str
+    system_question: str
+    user_answer: str = ""
+    field_updated: str
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    reason: str = ""
+
+
+class ChatIntakeSession(BaseModel):
+    topic_prompt: TopicPrompt
+    brief: ResearchBrief
+    turns: list[ChatIntakeTurn] = Field(default_factory=list)
+    status: str = "exploring"
+    current_question_id: str | None = None
+    current_question: str | None = None
+    current_field: str | None = None
+    interpretation: str = ""
+
+
 class OperatorPolicyConfig(BaseModel):
     implication_enter_threshold: float = Field(default=0.68, ge=0.0, le=1.0)
     asymmetric_enter_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
@@ -479,6 +519,10 @@ class FinalReport(BaseModel):
     calibration_notes: list[str] = Field(default_factory=list)
     provenance: list[str] = Field(default_factory=list)
     monitor_only_reason: str | None = None
+    topic_prompt: str = ""
+    deep_dive_objective: str = ""
+    intake_assumptions: list[str] = Field(default_factory=list)
+    retrieval_questions: list[str] = Field(default_factory=list)
     detected_scenario: ScenarioDetection | None = None
     equity_opportunities: list[EquityOpportunity] = Field(default_factory=list)
 

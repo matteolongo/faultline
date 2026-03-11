@@ -111,3 +111,75 @@ def test_operator_surface_loads_followup_outcomes(tmp_path) -> None:
     assert "summary" in outcome_json
     assert outcome_markdown is not None
     assert "## Outcomes" in outcome_markdown
+
+
+def test_operator_surface_summarizes_topic_chat_run(tmp_path) -> None:
+    class _FakeWebSearchProvider:
+        provider_name = "openai-websearch"
+        source_family = "synthesis"
+
+        def query(self, question: str, *, story_key: str, fetched_at):
+            return [
+                {
+                    "id": "topic-1",
+                    "provider_name": self.provider_name,
+                    "provider_item_id": "topic-1",
+                    "source": self.source_family,
+                    "timestamp": fetched_at.isoformat(),
+                    "fetched_at": fetched_at.isoformat(),
+                    "published_at": fetched_at.isoformat(),
+                    "signal_type": "news-synthesis",
+                    "title": "Iran conflict disrupts energy shipping lanes",
+                    "summary": question,
+                    "source_url": "https://example.com/topic/1",
+                    "query_key": story_key,
+                    "region": "Global",
+                    "entities": ["Iran", "Israel"],
+                    "tags": ["energy", "shipping", "market-stress", "chokepoint"],
+                    "confidence": 0.82,
+                    "payload": {},
+                }
+            ]
+
+    class _FakeMacroProvider:
+        provider_name = "macro-fake"
+        source_family = "macro"
+
+        def fetch_window(self, start_at, end_at):
+            return [
+                {
+                    "id": "macro-1",
+                    "provider_name": self.provider_name,
+                    "provider_item_id": "macro-1",
+                    "source": self.source_family,
+                    "timestamp": end_at.isoformat(),
+                    "fetched_at": end_at.isoformat(),
+                    "published_at": end_at.isoformat(),
+                    "signal_type": "macro-observation",
+                    "title": "Oil spike pushes inflation expectations higher",
+                    "summary": "Energy and shipping costs are repricing globally.",
+                    "source_url": "https://example.com/macro/1",
+                    "query_key": "macro-1",
+                    "region": "Global",
+                    "entities": ["Oil", "Inflation"],
+                    "tags": ["energy", "market-stress", "chokepoint"],
+                    "confidence": 0.8,
+                    "payload": {},
+                }
+            ]
+
+    runner = StrategicSwarmRunner(
+        output_dir=tmp_path / "outputs",
+        database_url=f"sqlite:///{tmp_path / 'runs.sqlite'}",
+        live_providers=[_FakeMacroProvider()],
+        web_search_provider=_FakeWebSearchProvider(),
+    )
+    session = runner.prepare_topic_chat(
+        "Deep dive on Iran war impact on global inflation and listed defense/energy names over 3 months"
+    )
+
+    payload = run_and_summarize(runner, mode="topic_chat", topic_session=session.model_dump(mode="json"))
+
+    assert payload["summary"]["topic_prompt"].startswith("Deep dive on Iran war")
+    assert payload["summary"]["retrieval_question_count"] >= 3
+    assert payload["report_json"]["deep_dive_objective"]

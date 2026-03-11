@@ -9,9 +9,11 @@ from faultline.models import (
     OutcomeRecord,
     Prediction,
     RelatedSituation,
+    ResearchBrief,
     ScenarioPath,
     SituationSnapshot,
     StageTransitionWarning,
+    TopicPrompt,
 )
 
 
@@ -31,7 +33,20 @@ class ReportBuilder:
         exits: list[ActionRecommendation],
         endangered_symbols: list[str],
         provenance: list[str],
+        topic_prompt: TopicPrompt | dict | None = None,
+        research_brief: ResearchBrief | dict | None = None,
+        retrieval_questions: list[str] | None = None,
     ) -> FinalReport:
+        brief = (
+            research_brief
+            if isinstance(research_brief, ResearchBrief) or research_brief is None
+            else ResearchBrief.model_validate(research_brief)
+        )
+        prompt = (
+            topic_prompt
+            if isinstance(topic_prompt, TopicPrompt) or topic_prompt is None
+            else TopicPrompt.model_validate(topic_prompt)
+        )
         publishable = cluster.agreement_score >= 0.55 and snapshot.confidence >= 0.55 and bool(implications)
         publication_status = "publish" if publishable else "monitor_only"
         monitor_reason = None
@@ -92,6 +107,7 @@ class ReportBuilder:
             if actions
             else (sum(item.confidence for item in predictions) / len(predictions) if predictions else 0.0)
         )
+        retrieval_questions = retrieval_questions or []
 
         return FinalReport(
             publication_status=publication_status,
@@ -135,6 +151,10 @@ class ReportBuilder:
             calibration_notes=calibration_notes,
             provenance=provenance,
             monitor_only_reason=monitor_reason,
+            topic_prompt=prompt.topic if prompt is not None else "",
+            deep_dive_objective=self._deep_dive_objective(brief),
+            intake_assumptions=brief.assumptions if brief is not None else [],
+            retrieval_questions=retrieval_questions,
         )
 
     def _render_scenario_branch(self, path: ScenarioPath) -> str:
@@ -218,6 +238,18 @@ class ReportBuilder:
             provenance=provenance,
         )
 
+    def _deep_dive_objective(self, brief: ResearchBrief | None) -> str:
+        if brief is None:
+            return ""
+        return " | ".join(
+            [
+                brief.analysis_goal or "unspecified objective",
+                brief.geographic_scope or "unspecified geography",
+                brief.time_horizon or "unspecified time horizon",
+                brief.target_universe or "unspecified targets",
+            ]
+        )
+
 
 def render_markdown(report: FinalReport) -> str:
     lines = [
@@ -231,6 +263,12 @@ def render_markdown(report: FinalReport) -> str:
         "",
         "## Why Now",
         report.why_now,
+        "",
+        "## Topic Prompt",
+        report.topic_prompt or "No topic prompt provided.",
+        "",
+        "## Deep-Dive Objective",
+        report.deep_dive_objective or "No structured intake objective provided.",
         "",
         "## Publication Status",
         report.publication_status,
@@ -299,6 +337,12 @@ def render_markdown(report: FinalReport) -> str:
             "",
             "## Calibration",
             *[f"- {item}" for item in report.calibration_notes],
+            "",
+            "## Intake Assumptions",
+            *[f"- {item}" for item in report.intake_assumptions],
+            "",
+            "## Retrieval Questions",
+            *[f"- {item}" for item in report.retrieval_questions],
             "",
             "## References",
             *[f"- {item}" for item in report.references],

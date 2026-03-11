@@ -7,17 +7,23 @@ from uuid import uuid4
 
 from faultline.evaluation.rubric import evaluate_report
 from faultline.graph.workflow import StrategicSwarmWorkflow
+from faultline.intake import TopicChatIntake
 from faultline.models import (
+    ChatIntakeSession,
     OperatorPolicyConfig,
     OutcomeRecord,
     PortfolioPosition,
     Prediction,
     PublishedReport,
     RawSignal,
+    ResearchBrief,
+    TopicPrompt,
     WatchlistEntry,
 )
-from faultline.persistence.store import SignalStore
+from faultline.persistence.store import SignalStore, make_dead_letter
 from faultline.prediction import OutcomeEvaluator
+from faultline.providers.base import ProviderError
+from faultline.providers.live import WebSearchEnricher
 from faultline.providers.registry import build_live_providers
 from faultline.providers.sample import SampleScenarioRepository
 from faultline.synthesis.report_builder import render_markdown, render_outcome_markdown
@@ -36,6 +42,9 @@ class StrategicSwarmRunner:
         output_dir: str | Path | None = None,
         db_path: str | Path | None = None,
         database_url: str | None = None,
+        live_providers: list | None = None,
+        web_search_provider: WebSearchEnricher | None = None,
+        topic_chat_intake: TopicChatIntake | None = None,
     ) -> None:
         bootstrap_env()
         self.output_dir = ensure_directory(Path(output_dir or os.getenv("FAULTLINE_OUTPUT_DIR", "outputs")))
@@ -44,7 +53,10 @@ class StrategicSwarmRunner:
             str(Path(db_path or self.output_dir / "swarm_runs.sqlite")),
         )
         self.store = SignalStore(self.database_url)
-        self.workflow = StrategicSwarmWorkflow(store=self.store, live_providers=build_live_providers()).build()
+        self.live_providers = live_providers or build_live_providers()
+        self.web_search_provider = web_search_provider or WebSearchEnricher()
+        self.topic_chat_intake = topic_chat_intake or TopicChatIntake()
+        self.workflow = StrategicSwarmWorkflow(store=self.store, live_providers=self.live_providers).build()
         self.outcome_evaluator = OutcomeEvaluator()
 
     def run_demo(
@@ -127,6 +139,109 @@ class StrategicSwarmRunner:
             followup_limit_runs=followup_limit_runs,
             followup_include_demo=followup_include_demo,
             followup_rescore_existing=followup_rescore_existing,
+        )
+
+    def prepare_topic_chat(
+        self,
+        topic: str,
+        *,
+        thesis: str | None = None,
+        portfolio_positions: list[PortfolioPosition | dict] | None = None,
+        watchlist: list[WatchlistEntry | dict] | None = None,
+    ) -> ChatIntakeSession:
+        return self.topic_chat_intake.start_session(
+            topic,
+            thesis=thesis,
+            portfolio_positions=portfolio_positions,
+            watchlist=watchlist,
+        )
+
+    def continue_topic_chat(
+        self,
+        session: ChatIntakeSession | dict,
+        answer: str,
+    ) -> ChatIntakeSession:
+        return self.topic_chat_intake.answer_question(session, answer)
+
+    def run_topic_chat(
+        self,
+        session: ChatIntakeSession | dict,
+        *,
+        operator_policy_config: OperatorPolicyConfig | dict | None = None,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+    ) -> dict:
+        intake_session = session if isinstance(session, ChatIntakeSession) else ChatIntakeSession.model_validate(session)
+        if not self.topic_chat_intake.is_ready(intake_session):
+            raise ValueError(intake_session.current_question or "Topic chat is not ready to run.")
+
+        window_start, window_end = self.topic_chat_intake.default_window()
+        start_at = start_at or window_start
+        end_at = end_at or window_end
+        retrieval_questions = self.topic_chat_intake.build_retrieval_questions(intake_session.brief)
+        raw_signals: list[RawSignal] = []
+        story_key = self._topic_story_key(intake_session.brief)
+
+        for question in retrieval_questions:
+            try:
+                raw_signals.extend(self.web_search_provider.query(question, story_key=story_key, fetched_at=end_at))
+            except ProviderError as exc:
+                self.store.save_dead_letter(
+                    make_dead_letter(
+                        provider_name=self.web_search_provider.provider_name,
+                        window_start=start_at,
+                        window_end=end_at,
+                        error_type="provider_error",
+                        error_message=str(exc),
+                    )
+                )
+        for provider in self.live_providers:
+            if getattr(provider, "source_family", "") not in {"market", "macro"}:
+                continue
+            try:
+                raw_signals.extend(provider.fetch_window(start_at, end_at))
+            except ProviderError as exc:
+                self.store.save_dead_letter(
+                    make_dead_letter(
+                        provider_name=provider.provider_name,
+                        window_start=start_at,
+                        window_end=end_at,
+                        error_type="provider_error",
+                        error_message=str(exc),
+                    )
+                )
+
+        initial_provenance = [
+            f"Topic chat started from '{intake_session.topic_prompt.topic}'.",
+            f"Interpreted objective: {self.topic_chat_intake.describe_brief(intake_session.brief)}",
+            f"Generated {len(retrieval_questions)} retrieval questions before signal ingestion.",
+        ]
+        if intake_session.brief.assumptions:
+            initial_provenance.extend(f"Assumption: {item}" for item in intake_session.brief.assumptions)
+
+        return self._run(
+            initial_state={
+                "run_mode": "topic_chat",
+                "window_start": start_at.isoformat(),
+                "window_end": end_at.isoformat(),
+                "portfolio_positions": intake_session.brief.positions,
+                "watchlist": intake_session.brief.watchlist,
+                "operator_policy_config": operator_policy_config,
+                "topic_prompt": intake_session.topic_prompt,
+                "research_brief": intake_session.brief,
+                "chat_intake_session": intake_session,
+                "retrieval_questions": retrieval_questions,
+                "raw_signals": raw_signals,
+                "provenance": initial_provenance,
+                "diagnostics": {
+                    "brief_status": intake_session.status,
+                    "topic_prompt": intake_session.topic_prompt.topic,
+                    "deep_dive_objective": self.topic_chat_intake.describe_brief(intake_session.brief),
+                    "retrieval_questions": retrieval_questions,
+                    "intake_assumptions": intake_session.brief.assumptions,
+                    "topic_chat_turn_count": len(intake_session.turns),
+                },
+            }
         )
 
     def ingest_window(self, *, start_at: datetime, end_at: datetime) -> dict:
@@ -286,7 +401,7 @@ class StrategicSwarmRunner:
 
     def provider_health(self) -> list[dict]:
         providers = []
-        for provider in build_live_providers():
+        for provider in self.live_providers:
             configured = bool(
                 os.getenv(
                     {
@@ -302,7 +417,7 @@ class StrategicSwarmRunner:
 
     def _run(self, *, initial_state: dict) -> dict:
         run_id = uuid4().hex[:12]
-        if initial_state.get("raw_signals"):
+        if "raw_signals" in initial_state:
             initial_state["raw_signals"] = [
                 signal if isinstance(signal, RawSignal) else RawSignal.model_validate(signal)
                 for signal in initial_state["raw_signals"]
@@ -320,9 +435,22 @@ class StrategicSwarmRunner:
             initial_state["operator_policy_config"] = (
                 policy if isinstance(policy, OperatorPolicyConfig) else OperatorPolicyConfig.model_validate(policy)
             )
+        if initial_state.get("topic_prompt") is not None:
+            prompt = initial_state["topic_prompt"]
+            initial_state["topic_prompt"] = prompt if isinstance(prompt, TopicPrompt) else TopicPrompt.model_validate(prompt)
+        if initial_state.get("research_brief") is not None:
+            brief = initial_state["research_brief"]
+            initial_state["research_brief"] = (
+                brief if isinstance(brief, ResearchBrief) else ResearchBrief.model_validate(brief)
+            )
+        if initial_state.get("chat_intake_session") is not None:
+            session = initial_state["chat_intake_session"]
+            initial_state["chat_intake_session"] = (
+                session if isinstance(session, ChatIntakeSession) else ChatIntakeSession.model_validate(session)
+            )
         initial_state = {
             **initial_state,
-            "diagnostics": {"run_id": run_id},
+            "diagnostics": {"run_id": run_id, **initial_state.get("diagnostics", {})},
         }
         snapshots = list(self.workflow.stream(initial_state, stream_mode="values"))
         final_state = snapshots[-1]
@@ -390,6 +518,10 @@ class StrategicSwarmRunner:
             return
         write_json(run_dir / "outcomes.json", {"run_id": run_id, "summary": summary, "outcomes": outcomes})
         write_text(run_dir / "outcomes.md", render_outcome_markdown(run_id=run_id, outcomes=outcomes, summary=summary))
+
+    def _topic_story_key(self, brief: ResearchBrief) -> str:
+        seed = brief.normalized_topic or brief.original_topic
+        return "_".join(token for token in seed.lower().replace("/", " ").split() if token)[:80] or "topic_chat"
 
 
 def default_goldset() -> list[str]:
