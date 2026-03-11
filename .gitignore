@@ -18,6 +18,9 @@ coverage.xml
 htmlcov/
 tmp/
 
+# Temporary files
+tmp/
+
 # Environment & secrets
 .env
 .env.local
@@ -39,3 +42,9 @@ notebooks/outputs/
 
 # VSCode (settings committed, but workspace-local overrides excluded)
 .vscode/*.code-workspace
+
+# Temp files and test artifacts
+tmp/
+
+# JetBrains IDE
+.idea/

@@ -66,12 +66,13 @@ class OutcomeEvaluator:
                 0.18,
                 [signal.id for signal in matched[:3]],
             )
-        if self._matching_signals(signals, prediction.related_actors, set()):
+        related_actor_signals = self._matching_signals(signals, prediction.related_actors, set())
+        if related_actor_signals:
             return (
                 "partial",
                 "Related actors stayed in the story, but the expected move is not clearly confirmed yet.",
                 0.05,
-                [signal.id for signal in self._matching_signals(signals, prediction.related_actors, set())[:3]],
+                [signal.id for signal in related_actor_signals[:3]],
             )
         return (
             "unconfirmed",

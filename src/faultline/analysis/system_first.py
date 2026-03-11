@@ -350,11 +350,12 @@ class PredictionEngine:
         challenger = snapshot.key_actors[1].name if len(snapshot.key_actors) > 1 else snapshot.system_under_pressure
         priors = self._prediction_priors(snapshot, cluster)
         affected_assets = self._affected_assets(cluster)
+        mechanism_descriptor = snapshot.mechanisms[0].name if snapshot.mechanisms else snapshot.system_under_pressure
         predictions = [
             Prediction(
                 prediction_type="actor_move",
                 description=f"{incumbent} will respond by tightening control or repricing the defended surface.",
-                rationale=f"{snapshot.stage.stage} stage plus {snapshot.mechanisms[0].name} favors defensive repositioning.",
+                rationale=f"{snapshot.stage.stage} stage plus {mechanism_descriptor} favors defensive repositioning.",
                 time_horizon="1-4 weeks",
                 related_actors=[incumbent, challenger],
                 confidence=min(0.92, snapshot.confidence * 0.9),
