@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from faultline.analysis.system_first import _calibration_by_type
 from faultline.models import (
     ActionRecommendation,
     CalibrationSignal,
@@ -10,6 +9,10 @@ from faultline.models import (
 )
 
 
+def _calibration_by_type(calibration_signals: list[CalibrationSignal] | None) -> dict[str, CalibrationSignal]:
+    return {item.prediction_type: item for item in (calibration_signals or [])}
+
+
 class PortfolioActionEngine:
     def generate(
         self,
@@ -17,15 +20,16 @@ class PortfolioActionEngine:
         calibration_signals: list[CalibrationSignal] | None = None,
         portfolio_positions: list[PortfolioPosition] | None = None,
         watchlist: list[WatchlistEntry] | None = None,
-    ) -> tuple[list[ActionRecommendation], list[str]]:
+    ) -> tuple[list[ActionRecommendation], list[ActionRecommendation], list[str]]:
         calibration_index = _calibration_by_type(calibration_signals)
         portfolio_positions = portfolio_positions or []
         watchlist = watchlist or []
         actions: list[ActionRecommendation] = []
         actions.extend(self._portfolio_actions(portfolio_positions, implications, calibration_index))
         actions.extend(self._watchlist_actions(watchlist, implications, calibration_index))
+        exits = [item for item in actions if item.action in {"trim", "exit", "avoid"}]
         endangered = sorted(set(self._endangered_symbols(portfolio_positions, implications, calibration_index)))
-        return actions, endangered
+        return actions, exits, endangered
 
     def _conviction_for(
         self,

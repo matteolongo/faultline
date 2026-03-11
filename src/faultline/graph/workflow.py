@@ -254,14 +254,14 @@ class StrategicSwarmWorkflow:
             state.get("predictions", []),
             state.get("calibration_signals", []),
         )
-        portfolio_actions, endangered_symbols = self.portfolio_engine.generate(
+        portfolio_actions, portfolio_exits, endangered_symbols = self.portfolio_engine.generate(
             state.get("market_implications", []),
             state.get("calibration_signals", []),
             state.get("portfolio_positions", []),
             state.get("watchlist", []),
         )
         actions = actions + portfolio_actions
-        exits = exits + [item for item in portfolio_actions if item.action in {"trim", "exit", "avoid"}]
+        exits = exits + portfolio_exits
         return {
             "action_recommendations": actions,
             "exit_signals": exits,

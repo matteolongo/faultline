@@ -19,7 +19,7 @@ def test_action_engine_flags_endangered_held_symbols() -> None:
             confidence=0.8,
         )
     ]
-    actions, endangered = engine.generate(
+    actions, exits, endangered = engine.generate(
         implications=implications,
         portfolio_positions=[PortfolioPosition(symbol="AAPL", direction="long", quantity=10)],
         watchlist=[],
@@ -31,7 +31,7 @@ def test_action_engine_flags_endangered_held_symbols() -> None:
 
 def test_action_engine_generates_watchlist_recommendations() -> None:
     engine = PortfolioActionEngine()
-    actions, _ = engine.generate(
+    actions, _, _ = engine.generate(
         implications=[
             MarketImplication(
                 target="Open ecosystem enablers",
