@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from faultline.utils.io import ensure_directory, serialize_model, write_json, write_text
 from faultline.utils.logging import JsonLogFormatter, configure_logging
 
-
 # ── io tests ────────────────────────────────────────────────────────────────
 
 
