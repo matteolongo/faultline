@@ -19,5 +19,7 @@ def test_all_demo_scenarios_run_end_to_end(tmp_path) -> None:
         assert report.publication_status in {"publish", "monitor_only"}
         assert report.mechanism_map
         assert report.scenario_map
+        assert report.confidence_boundaries
+        assert report.action_traceability
         assert report.actions_now
         assert result["evaluation"]["overall"] >= 0.65

@@ -62,20 +62,24 @@ class ReportBuilder:
             f"[{prediction.confidence_band} {prediction.confidence:.0%}]"
             for prediction in predictions
         ]
-        scenario_tree_lines = [
-            f"{item.name} | p={item.probability:.0%} | {item.confidence_band} | {item.timeframe}"
-            for item in scenario_tree
-        ]
+        scenario_tree_lines = [self._render_scenario_branch(item) for item in scenario_tree]
         transition_warning_lines = [
             f"{item.from_stage}->{item.to_stage} in {item.lead_time} | p={item.probability:.0%} | trigger: {item.trigger}"
             for item in stage_transition_warnings
         ]
         priors = sorted({prior for prediction in predictions for prior in prediction.prior_evidence})
+        confidence_boundaries = self._confidence_boundaries()
         market_lines = [
             f"{item.target}: {item.direction} | {item.thesis_type} | {item.rationale}" for item in implications
         ]
         action_lines = [f"{item.action.upper()} {item.target}: {item.rationale}" for item in actions]
         exit_lines = [f"{item.action.upper()} {item.target}: {item.rationale}" for item in exits]
+        action_traceability = self._action_traceability(
+            actions=actions,
+            predictions=predictions,
+            warnings=stage_transition_warnings,
+            evidence=snapshot.evidence,
+        )
         evidence = [f"{item.title}: {item.rationale}" for item in snapshot.evidence]
         references = [item.source_url for item in snapshot.evidence if item.source_url]
         references.extend(f"memory:{item.title}" for item in related_situations[:2])
@@ -110,6 +114,8 @@ class ReportBuilder:
             scenario_tree=scenario_tree_lines,
             stage_transition_warnings=transition_warning_lines,
             prediction_priors=priors,
+            confidence_boundaries=confidence_boundaries,
+            action_traceability=action_traceability,
             market_implications=market_lines,
             actions_now=action_lines,
             exit_signals=exit_lines,
@@ -134,6 +140,78 @@ class ReportBuilder:
             opportunity_map=market_lines,
             execution_recommendations=action_lines,
         )
+
+    def _render_scenario_branch(self, path: ScenarioPath) -> str:
+        trigger = path.trigger_signals[0] if path.trigger_signals else "follow-up confirmation broadens"
+        effect = path.market_effects[0] if path.market_effects else "relative repricing continues"
+        return (
+            f"{path.name} ({path.branch_type}) -> p={path.probability:.0%} [{path.confidence_band}] in {path.timeframe}. "
+            f"If {trigger.lower()}, then {effect.lower()}."
+        )
+
+    def _confidence_boundaries(self) -> list[str]:
+        return [
+            "high_confidence: >=74% conviction. Bias toward direct execution unless invalidation signals appear.",
+            "asymmetric: 58%-73% conviction. Scale in with staged sizing and explicit downside controls.",
+            "speculative: <58% conviction. Monitor only; avoid full-size directional exposure.",
+        ]
+
+    def _action_traceability(
+        self,
+        *,
+        actions: list[ActionRecommendation],
+        predictions: list[Prediction],
+        warnings: list[StageTransitionWarning],
+        evidence: list,
+    ) -> list[str]:
+        evidence_titles = [item.title for item in evidence]
+        timing_prediction = max((item for item in predictions if item.prediction_type == "timing_window"), default=None)
+        strongest_warning = max(warnings, key=lambda item: item.probability, default=None)
+        lines: list[str] = []
+        for action in actions:
+            band = self._band_for(action.confidence)
+            linked_prediction = self._prediction_for_action(action, predictions)
+            support = []
+            if linked_prediction is not None:
+                support.append(f"prediction={linked_prediction.prediction_type}:{linked_prediction.confidence:.0%}")
+            if action.thesis_type == "timing_window_policy" and timing_prediction is not None:
+                support.append(f"timing_window={timing_prediction.confidence:.0%}")
+            if (
+                action.thesis_type in {"stage_transition_warning", "timing_window_policy"}
+                and strongest_warning is not None
+            ):
+                support.append(
+                    f"stage_warning={strongest_warning.from_stage}->{strongest_warning.to_stage}:{strongest_warning.probability:.0%}"
+                )
+            if evidence_titles:
+                support.append(f"evidence={evidence_titles[0]}")
+                if len(evidence_titles) > 1:
+                    support.append(f"evidence_2={evidence_titles[1]}")
+            lines.append(
+                f"{action.action.upper()} {action.target} | confidence={action.confidence:.0%} ({band}) | "
+                f"{'; '.join(support) if support else 'support=limited'}"
+            )
+        return lines
+
+    def _prediction_for_action(
+        self,
+        action: ActionRecommendation,
+        predictions: list[Prediction],
+    ) -> Prediction | None:
+        if action.thesis_type == "stage_transition_warning":
+            return next((item for item in predictions if item.prediction_type == "timing_window"), None)
+        if action.thesis_type in {"portfolio_position", "watchlist_symbol", "timing_window_policy"}:
+            return next((item for item in predictions if item.prediction_type == "asset_repricing"), None)
+        if action.thesis_type == "asymmetric_opportunity":
+            return next((item for item in predictions if item.prediction_type == "narrative"), None)
+        return next((item for item in predictions if item.prediction_type == "actor_move"), None)
+
+    def _band_for(self, confidence: float) -> str:
+        if confidence >= 0.74:
+            return "high_confidence"
+        if confidence >= 0.58:
+            return "asymmetric"
+        return "speculative"
 
     def empty_report(self, provenance: list[str]) -> FinalReport:
         return FinalReport(
@@ -188,11 +266,17 @@ def render_markdown(report: FinalReport) -> str:
         "## Prediction Priors",
         *[f"- {item}" for item in report.prediction_priors],
         "",
+        "## Confidence Boundaries",
+        *[f"- {item}" for item in report.confidence_boundaries],
+        "",
         "## Market Implications",
         *[f"- {item}" for item in report.market_implications],
         "",
         "## Actions Now",
         *[f"- {item}" for item in report.actions_now],
+        "",
+        "## Action Traceability",
+        *[f"- {item}" for item in report.action_traceability],
         "",
         "## Exit Signals",
         *[f"- {item}" for item in report.exit_signals],
