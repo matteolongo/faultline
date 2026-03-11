@@ -97,7 +97,12 @@ class StrategicSwarmWorkflow:
 
     def ingest_signals(self, state: FaultlineState) -> FaultlineState:
         if "raw_signals" in state:
-            return {"provenance": [*state.get("provenance", []), f"Loaded {len(state['raw_signals'])} raw signals into the workflow."]}
+            return {
+                "provenance": [
+                    *state.get("provenance", []),
+                    f"Loaded {len(state['raw_signals'])} raw signals into the workflow.",
+                ]
+            }
 
         if state.get("run_mode") == "demo":
             scenario_id = state.get("scenario_id") or "open_model_breakout"
@@ -286,10 +291,14 @@ class StrategicSwarmWorkflow:
             topic_prompt = state.get("topic_prompt")
             research_brief = state.get("research_brief")
             if topic_prompt is not None:
-                report.topic_prompt = topic_prompt.topic if hasattr(topic_prompt, "topic") else topic_prompt.get("topic", "")
+                report.topic_prompt = (
+                    topic_prompt.topic if hasattr(topic_prompt, "topic") else topic_prompt.get("topic", "")
+                )
             if research_brief is not None:
                 assumptions = (
-                    research_brief.assumptions if hasattr(research_brief, "assumptions") else research_brief.get("assumptions", [])
+                    research_brief.assumptions
+                    if hasattr(research_brief, "assumptions")
+                    else research_brief.get("assumptions", [])
                 )
                 report.intake_assumptions = assumptions
                 report.deep_dive_objective = self.report_builder._deep_dive_objective(research_brief)  # type: ignore[arg-type]

@@ -171,7 +171,9 @@ class StrategicSwarmRunner:
         start_at: datetime | None = None,
         end_at: datetime | None = None,
     ) -> dict:
-        intake_session = session if isinstance(session, ChatIntakeSession) else ChatIntakeSession.model_validate(session)
+        intake_session = (
+            session if isinstance(session, ChatIntakeSession) else ChatIntakeSession.model_validate(session)
+        )
         if not self.topic_chat_intake.is_ready(intake_session):
             raise ValueError(intake_session.current_question or "Topic chat is not ready to run.")
 
@@ -437,7 +439,9 @@ class StrategicSwarmRunner:
             )
         if initial_state.get("topic_prompt") is not None:
             prompt = initial_state["topic_prompt"]
-            initial_state["topic_prompt"] = prompt if isinstance(prompt, TopicPrompt) else TopicPrompt.model_validate(prompt)
+            initial_state["topic_prompt"] = (
+                prompt if isinstance(prompt, TopicPrompt) else TopicPrompt.model_validate(prompt)
+            )
         if initial_state.get("research_brief") is not None:
             brief = initial_state["research_brief"]
             initial_state["research_brief"] = (

@@ -157,10 +157,7 @@ class TopicChatIntake:
         target = current.target_universe or "public markets"
         system = current.system_under_study or current.normalized_topic or current.original_topic
         questions = [
-            (
-                f"What are the latest confirmed developments on {system} affecting {geography} "
-                f"over the {horizon}?"
-            ),
+            (f"What are the latest confirmed developments on {system} affecting {geography} over the {horizon}?"),
             (
                 f"Which first-order transmission channels from {system} matter most for {geography}, "
                 "including energy, shipping, inflation, rates, and supply chains where relevant?"
@@ -176,9 +173,7 @@ class TopicChatIntake:
             )
         if current.portfolio_focus != "broader_market" and (current.positions or current.watchlist):
             watched = [item.symbol for item in [*current.positions, *current.watchlist][:6]]
-            questions.append(
-                f"How does {system} affect these listed exposures: {', '.join(watched)}?"
-            )
+            questions.append(f"How does {system} affect these listed exposures: {', '.join(watched)}?")
         return questions
 
     def default_window(self) -> tuple[datetime, datetime]:

@@ -84,8 +84,12 @@ def main() -> None:
     if mode == "topic_chat":
         topic = st.sidebar.text_area("Topic or thesis", value=st.session_state.get("topic_chat_topic", ""), height=100)
         thesis = st.sidebar.text_input("Optional thesis", value=st.session_state.get("topic_chat_thesis", ""))
-        positions_raw = st.sidebar.text_input("Positions (optional)", value=st.session_state.get("topic_chat_positions", ""))
-        watchlist_raw = st.sidebar.text_input("Watchlist (optional)", value=st.session_state.get("topic_chat_watchlist", ""))
+        positions_raw = st.sidebar.text_input(
+            "Positions (optional)", value=st.session_state.get("topic_chat_positions", "")
+        )
+        watchlist_raw = st.sidebar.text_input(
+            "Watchlist (optional)", value=st.session_state.get("topic_chat_watchlist", "")
+        )
         st.session_state["topic_chat_topic"] = topic
         st.session_state["topic_chat_thesis"] = thesis
         st.session_state["topic_chat_positions"] = positions_raw

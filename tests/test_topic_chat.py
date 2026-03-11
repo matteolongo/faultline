@@ -125,7 +125,10 @@ def test_runner_topic_chat_produces_report_with_provenance(tmp_path) -> None:
     report = result["final_state"]["final_report"]
     diagnostics = result["final_state"]["diagnostics"]
 
-    assert report.topic_prompt == "Deep dive on Iran war impact on global inflation and listed defense/energy names over 3 months"
+    assert (
+        report.topic_prompt
+        == "Deep dive on Iran war impact on global inflation and listed defense/energy names over 3 months"
+    )
     assert report.deep_dive_objective
     assert len(report.retrieval_questions) >= 3
     assert diagnostics["topic_chat_turn_count"] == 0
