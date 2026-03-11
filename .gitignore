@@ -44,3 +44,6 @@ notebooks/outputs/
 
 # Temp files and test artifacts
 tmp/
+
+# JetBrains IDE
+.idea/

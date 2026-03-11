@@ -13,6 +13,17 @@ This repository currently implements a narrow "empire vs disruptor" fragility en
 
 The old architecture should be treated as disposable where it creates drag. Preserve only components that still reduce implementation cost.
 
+## Implementation Progress
+
+- [x] Slice 0: plan baseline committed.
+- [x] Slice 1: shared ontology + state migration landed.
+- [x] Slice 2-3: mechanism/stage config and system-first workflow landed.
+- [x] Slice 4: local memory retrieval integrated into execution path.
+- [x] Slice 5: prediction persistence + follow-up outcome scoring landed.
+- [ ] Slice 6: operator storytelling underway (in progress).
+- [x] Added portfolio/watchlist-aware actioning and endangered-symbol reporting.
+- [ ] Added scenario-tree prediction layer with stage-transition warnings and confidence-band boundaries (in progress, current branch).
+
 ## Operating Rules
 
 - Prefer replacement over incremental stretching when old abstractions are misaligned.

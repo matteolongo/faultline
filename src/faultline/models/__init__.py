@@ -34,6 +34,7 @@ from faultline.models.contracts import (
     SignalEvent,
     SituationSnapshot,
     StageAssessment,
+    StageTransitionWarning,
     WatchlistEntry,
 )
 from faultline.models.state import FaultlineInputSchema, FaultlineState
@@ -74,6 +75,7 @@ __all__ = [
     "SignalEvent",
     "SituationSnapshot",
     "StageAssessment",
+    "StageTransitionWarning",
     "WatchlistEntry",
     "FaultlineState",
     "FaultlineInputSchema",

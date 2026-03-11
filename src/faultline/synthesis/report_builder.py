@@ -9,7 +9,9 @@ from faultline.models import (
     OutcomeRecord,
     Prediction,
     RelatedSituation,
+    ScenarioPath,
     SituationSnapshot,
+    StageTransitionWarning,
 )
 
 
@@ -22,6 +24,8 @@ class ReportBuilder:
         related_situations: list[RelatedSituation],
         calibration_signals: list[CalibrationSignal],
         predictions: list[Prediction],
+        scenario_tree: list[ScenarioPath],
+        stage_transition_warnings: list[StageTransitionWarning],
         implications: list[MarketImplication],
         actions: list[ActionRecommendation],
         exits: list[ActionRecommendation],
@@ -54,9 +58,19 @@ class ReportBuilder:
         ]
         mechanism_map = [f"{item.name}: {item.explanation}" for item in snapshot.mechanisms]
         scenario_map = [
-            f"{prediction.prediction_type}: {prediction.description} ({prediction.time_horizon})"
+            f"{prediction.prediction_type}: {prediction.description} ({prediction.time_horizon}) "
+            f"[{prediction.confidence_band} {prediction.confidence:.0%}]"
             for prediction in predictions
         ]
+        scenario_tree_lines = [
+            f"{item.name} | p={item.probability:.0%} | {item.confidence_band} | {item.timeframe}"
+            for item in scenario_tree
+        ]
+        transition_warning_lines = [
+            f"{item.from_stage}->{item.to_stage} in {item.lead_time} | p={item.probability:.0%} | trigger: {item.trigger}"
+            for item in stage_transition_warnings
+        ]
+        priors = sorted({prior for prediction in predictions for prior in prediction.prior_evidence})
         market_lines = [
             f"{item.target}: {item.direction} | {item.thesis_type} | {item.rationale}" for item in implications
         ]
@@ -93,6 +107,9 @@ class ReportBuilder:
             system_map=system_map,
             mechanism_map=mechanism_map,
             scenario_map=scenario_map,
+            scenario_tree=scenario_tree_lines,
+            stage_transition_warnings=transition_warning_lines,
+            prediction_priors=priors,
             market_implications=market_lines,
             actions_now=action_lines,
             exit_signals=exit_lines,
@@ -161,6 +178,15 @@ def render_markdown(report: FinalReport) -> str:
         "",
         "## Likely Next Moves",
         *[f"- {item}" for item in report.scenario_map],
+        "",
+        "## Scenario Tree",
+        *[f"- {item}" for item in report.scenario_tree],
+        "",
+        "## Stage Transition Warnings",
+        *[f"- {item}" for item in report.stage_transition_warnings],
+        "",
+        "## Prediction Priors",
+        *[f"- {item}" for item in report.prediction_priors],
         "",
         "## Market Implications",
         *[f"- {item}" for item in report.market_implications],
