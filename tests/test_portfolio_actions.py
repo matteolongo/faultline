@@ -1,4 +1,4 @@
-from faultline.analysis.system_first import ActionEngine
+from faultline.analysis.portfolio_engine import PortfolioActionEngine
 from faultline.graph.runner import StrategicSwarmRunner
 from faultline.models import (
     MarketImplication,
@@ -8,7 +8,7 @@ from faultline.models import (
 
 
 def test_action_engine_flags_endangered_held_symbols() -> None:
-    engine = ActionEngine()
+    engine = PortfolioActionEngine()
     implications = [
         MarketImplication(
             target="Exposed incumbents",
@@ -19,7 +19,7 @@ def test_action_engine_flags_endangered_held_symbols() -> None:
             confidence=0.8,
         )
     ]
-    actions, endangered = engine.generate_portfolio_actions(
+    actions, endangered = engine.generate(
         implications=implications,
         portfolio_positions=[PortfolioPosition(symbol="AAPL", direction="long", quantity=10)],
         watchlist=[],
@@ -30,8 +30,8 @@ def test_action_engine_flags_endangered_held_symbols() -> None:
 
 
 def test_action_engine_generates_watchlist_recommendations() -> None:
-    engine = ActionEngine()
-    actions, _ = engine.generate_portfolio_actions(
+    engine = PortfolioActionEngine()
+    actions, _ = engine.generate(
         implications=[
             MarketImplication(
                 target="Open ecosystem enablers",

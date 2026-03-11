@@ -38,6 +38,7 @@ except Exception:  # pragma: no cover
 
 
 from faultline.analysis import ActionEngine, MarketMapper, PredictionEngine, SituationMapper
+from faultline.analysis.portfolio_engine import PortfolioActionEngine
 from faultline.memory import SituationMemory
 from faultline.models import FaultlineState
 from faultline.persistence.store import SignalStore, make_dead_letter
@@ -67,6 +68,7 @@ class StrategicSwarmWorkflow:
         self.prediction_engine = PredictionEngine()
         self.market_mapper = MarketMapper()
         self.action_engine = ActionEngine()
+        self.portfolio_engine = PortfolioActionEngine()
         self.report_builder = ReportBuilder()
 
     def build(self, *, _input_schema=None):
@@ -252,7 +254,7 @@ class StrategicSwarmWorkflow:
             state.get("predictions", []),
             state.get("calibration_signals", []),
         )
-        portfolio_actions, endangered_symbols = self.action_engine.generate_portfolio_actions(
+        portfolio_actions, endangered_symbols = self.portfolio_engine.generate(
             state.get("market_implications", []),
             state.get("calibration_signals", []),
             state.get("portfolio_positions", []),
