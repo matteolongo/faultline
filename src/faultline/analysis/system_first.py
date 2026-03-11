@@ -486,15 +486,10 @@ class ActionEngine:
         implications: list[MarketImplication],
         predictions: list[Prediction],
         calibration_signals: list[CalibrationSignal] | None = None,
-        portfolio_positions: list[PortfolioPosition] | None = None,
-        watchlist: list[WatchlistEntry] | None = None,
-    ) -> tuple[list[ActionRecommendation], list[ActionRecommendation], list[str]]:
+    ) -> tuple[list[ActionRecommendation], list[ActionRecommendation]]:
         calibration_index = _calibration_by_type(calibration_signals)
-        portfolio_positions = portfolio_positions or []
-        watchlist = watchlist or []
         actions: list[ActionRecommendation] = []
         exits: list[ActionRecommendation] = []
-        endangered_symbols: list[str] = []
         for implication in implications:
             conviction = self._conviction_for(implication, calibration_index)
             if implication.thesis_type == "asymmetric_opportunity":
@@ -544,14 +539,25 @@ class ActionEngine:
                     confidence=0.4,
                 )
             )
+        return actions, exits
+
+    def generate_portfolio_actions(
+        self,
+        implications: list[MarketImplication],
+        calibration_signals: list[CalibrationSignal] | None = None,
+        portfolio_positions: list[PortfolioPosition] | None = None,
+        watchlist: list[WatchlistEntry] | None = None,
+    ) -> tuple[list[ActionRecommendation], list[str]]:
+        calibration_index = _calibration_by_type(calibration_signals)
+        portfolio_positions = portfolio_positions or []
+        watchlist = watchlist or []
+        actions: list[ActionRecommendation] = []
         portfolio_actions = self._portfolio_actions(portfolio_positions, implications, calibration_index)
         actions.extend(portfolio_actions)
-        exits.extend([item for item in portfolio_actions if item.action in {"trim", "exit"}])
         watchlist_actions = self._watchlist_actions(watchlist, implications, calibration_index)
         actions.extend(watchlist_actions)
-        exits.extend([item for item in watchlist_actions if item.action in {"avoid", "trim", "exit"}])
-        endangered_symbols.extend(self._endangered_symbols(portfolio_positions, implications, calibration_index))
-        return actions, exits, sorted(set(endangered_symbols))
+        endangered = sorted(set(self._endangered_symbols(portfolio_positions, implications, calibration_index)))
+        return actions, endangered
 
     def _conviction_for(
         self,
