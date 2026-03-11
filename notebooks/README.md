@@ -1,6 +1,6 @@
 # Notebooks
 
-The primary notebook surface is [strategic_swarm_operator_surface.ipynb](/Users/matteo.longo/projects/streategic_swarm_agent/notebooks/strategic_swarm_operator_surface.ipynb).
+The primary notebook surface is `faultline_operator_surface.ipynb`.
 
 It is an operator-focused notebook for:
 
@@ -14,5 +14,5 @@ It is an operator-focused notebook for:
 Launch it with:
 
 ```bash
-jupyter lab notebooks/strategic_swarm_operator_surface.ipynb
+jupyter lab notebooks/faultline_operator_surface.ipynb
 ```
