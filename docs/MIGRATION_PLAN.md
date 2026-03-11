@@ -26,6 +26,7 @@ The old architecture should be treated as disposable where it creates drag. Pres
 - [~] Added configurable operator decision policy with timing-window "leave-before-too-late" actions (current branch).
 - [~] Added automatic follow-up rescoring loop over stored windows, with calibration refresh from new outcomes (current branch).
 - [~] Upgraded report storytelling with action-to-evidence traceability and explicit confidence-boundary sections (current branch).
+- [x] Removed disconnected legacy `agents`/`scoring` pipelines and obsolete archetype-scoring configs from the main codebase.
 
 ## Operating Rules
 
