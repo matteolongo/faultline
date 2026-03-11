@@ -44,7 +44,7 @@ The production graph is in `src/faultline/graph/workflow.py`:
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e .[dev]
+pip install -e '.[dev]'
 ```
 
 ### Run demo scenarios (no API keys required)
@@ -151,8 +151,7 @@ docs/
 ## Development
 
 ```bash
-pip install -e .[dev]
-ruff check .
+pip install -e '.[dev]'
 ruff format --check src/ tests/ docs/
 pytest -q
 ```
