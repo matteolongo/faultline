@@ -465,6 +465,8 @@ class FinalReport(BaseModel):
     scenario_tree: list[str] = Field(default_factory=list)
     stage_transition_warnings: list[str] = Field(default_factory=list)
     prediction_priors: list[str] = Field(default_factory=list)
+    confidence_boundaries: list[str] = Field(default_factory=list)
+    action_traceability: list[str] = Field(default_factory=list)
     market_implications: list[str] = Field(default_factory=list)
     actions_now: list[str] = Field(default_factory=list)
     exit_signals: list[str] = Field(default_factory=list)

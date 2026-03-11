@@ -39,6 +39,7 @@ def summarize_final_state(final_state: dict[str, Any]) -> dict[str, Any]:
         "endangered_symbol_count": len(report.get("endangered_symbols") or []),
         "scenario_branch_count": len(report.get("scenario_tree") or []),
         "stage_warning_count": len(report.get("stage_transition_warnings") or []),
+        "action_traceability_count": len(report.get("action_traceability") or []),
     }
 
 

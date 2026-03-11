@@ -27,6 +27,7 @@ def test_operator_surface_summarizes_demo_run(tmp_path) -> None:
     assert "calibrated_conviction" in summary
     assert summary["scenario_branch_count"] >= 1
     assert summary["stage_warning_count"] >= 1
+    assert summary["action_traceability_count"] >= 1
     assert payload["report_json"]
     assert payload["report_markdown"]
 
