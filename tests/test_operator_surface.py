@@ -8,6 +8,7 @@ from faultline.presentation.operator_surface import (
     parse_operator_datetime,
     run_and_summarize,
     summarize_final_state,
+    workspace_checkpoint_rows,
 )
 from faultline.utils.io import write_json
 
@@ -183,3 +184,18 @@ def test_operator_surface_summarizes_topic_chat_run(tmp_path) -> None:
     assert payload["summary"]["topic_prompt"].startswith("Deep dive on Iran war")
     assert payload["summary"]["retrieval_question_count"] >= 3
     assert payload["report_json"]["deep_dive_objective"]
+
+
+def test_operator_surface_formats_workspace_rows() -> None:
+    rows = workspace_checkpoint_rows(
+        {
+            "current_stage": "evidence",
+            "stages": ["brief", "evidence", "report"],
+            "brief_checkpoint": {"status": "approved"},
+            "evidence_checkpoint": {"status": "generated"},
+            "report_checkpoint": {"status": "stale"},
+        }
+    )
+
+    assert rows[0] == {"stage": "brief", "status": "approved", "current": False}
+    assert rows[1] == {"stage": "evidence", "status": "generated", "current": True}

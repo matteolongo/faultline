@@ -45,7 +45,27 @@ def summarize_final_state(final_state: dict[str, Any]) -> dict[str, Any]:
         "retrieval_question_count": len(report.get("retrieval_questions") or []),
         "intake_assumption_count": len(report.get("intake_assumptions") or []),
         "topic_chat_turn_count": diagnostics.get("topic_chat_turn_count", 0),
+        "checkpoint_statuses": diagnostics.get("checkpoint_statuses", {}),
+        "approved_cluster_id": diagnostics.get("approved_cluster_id"),
+        "edited_retrieval_question_count": diagnostics.get("edited_retrieval_question_count", 0),
+        "included_signal_count": diagnostics.get("included_signal_count", 0),
+        "excluded_signal_count": diagnostics.get("excluded_signal_count", 0),
+        "stale_downstream_flags": diagnostics.get("stale_downstream_flags", {}),
     }
+
+
+def workspace_checkpoint_rows(workspace: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = []
+    for stage in workspace.get("stages", []):
+        checkpoint = workspace.get(f"{stage}_checkpoint", {})
+        rows.append(
+            {
+                "stage": stage,
+                "status": checkpoint.get("status", "not_started"),
+                "current": workspace.get("current_stage") == stage,
+            }
+        )
+    return rows
 
 
 def load_outcome_markdown(run_dir: str | Path) -> str | None:
