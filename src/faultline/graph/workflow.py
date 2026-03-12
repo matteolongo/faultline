@@ -39,7 +39,7 @@ except Exception:  # pragma: no cover
 
 from faultline.analysis import ActionEngine, MarketMapper, PredictionEngine, SituationMapper
 from faultline.memory import SituationMemory
-from faultline.models import FaultlineState
+from faultline.models import FaultlineState, ResearchBrief
 from faultline.persistence.store import SignalStore, make_dead_letter
 from faultline.providers.base import ProviderError, SignalProvider
 from faultline.providers.normalizer import SignalNormalizer
@@ -295,13 +295,11 @@ class StrategicSwarmWorkflow:
                     topic_prompt.topic if hasattr(topic_prompt, "topic") else topic_prompt.get("topic", "")
                 )
             if research_brief is not None:
-                assumptions = (
-                    research_brief.assumptions
-                    if hasattr(research_brief, "assumptions")
-                    else research_brief.get("assumptions", [])
-                )
+                if not isinstance(research_brief, ResearchBrief):
+                    research_brief = ResearchBrief.model_validate(research_brief)
+                assumptions = research_brief.assumptions
                 report.intake_assumptions = assumptions
-                report.deep_dive_objective = self.report_builder._deep_dive_objective(research_brief)  # type: ignore[arg-type]
+                report.deep_dive_objective = self.report_builder._deep_dive_objective(research_brief)
             report.retrieval_questions = state.get("retrieval_questions", [])
             return {
                 "final_report": report,
