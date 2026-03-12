@@ -1,7 +1,8 @@
+import json
 from datetime import UTC, datetime
 
 from faultline.graph.runner import StrategicSwarmRunner
-from faultline.models import RawSignal, ResearchBrief
+from faultline.models import RawSignal
 
 
 class _FakeWebSearchProvider:
@@ -9,7 +10,7 @@ class _FakeWebSearchProvider:
     source_family = "synthesis"
 
     def query(self, question: str, *, story_key: str, fetched_at: datetime) -> list[RawSignal]:
-        signals = [
+        return [
             RawSignal(
                 id="energy-1",
                 provider_name=self.provider_name,
@@ -49,7 +50,6 @@ class _FakeWebSearchProvider:
                 payload={},
             ),
         ]
-        return signals
 
 
 class _FakeMacroProvider:
@@ -80,7 +80,7 @@ class _FakeMacroProvider:
         ]
 
 
-def _workspace(tmp_path):
+def _start_review(tmp_path):
     runner = StrategicSwarmRunner(
         output_dir=tmp_path / "outputs",
         database_url=f"sqlite:///{tmp_path / 'runs.sqlite'}",
@@ -90,81 +90,110 @@ def _workspace(tmp_path):
     topic_session = runner.prepare_topic_chat(
         "Deep dive on Iran war impact on global inflation and listed defense/energy names over 3 months"
     )
-    workspace = runner.initialize_workspace(
-        topic_session,
+    review = runner.start_review_session(
+        mode="topic_chat",
+        topic_session=topic_session,
         start_at=datetime(2026, 3, 8, tzinfo=UTC),
         end_at=datetime(2026, 3, 9, tzinfo=UTC),
     )
-    workspace.brief_checkpoint.approved_brief = topic_session.brief
-    workspace.brief_checkpoint.status = "approved"
-    return runner, workspace
+    return runner, review
 
 
-def test_workspace_brief_edits_mark_downstream_stale(tmp_path) -> None:
-    runner, workspace = _workspace(tmp_path)
-    workspace = runner.build_evidence_checkpoint(workspace)
-    workspace.evidence_checkpoint.status = "approved"
-    workspace.evidence_checkpoint.approved_cluster_id = workspace.evidence_checkpoint.selected_cluster_id
-    workspace = runner.build_situation_checkpoint(workspace)
-    workspace.situation_checkpoint.status = "approved"
-
-    edited = ResearchBrief.model_validate(
-        {
-            **workspace.brief_checkpoint.approved_brief.model_dump(mode="json"),
-            "time_horizon": "6 months",
-        }
-    )
-    workspace = runner.apply_brief_edits(workspace, edited)
-
-    assert workspace.brief_checkpoint.status == "generated"
-    assert workspace.evidence_checkpoint.status == "stale"
-    assert workspace.situation_checkpoint.status == "stale"
+def _advance_to(runner: StrategicSwarmRunner, review, node_id: str):
+    current = review
+    while current.status != "completed" and current.current_node_id != node_id:
+        current = runner.approve_review_step(current)
+    return current
 
 
-def test_workspace_excluding_signal_changes_selected_cluster(tmp_path) -> None:
-    runner, workspace = _workspace(tmp_path)
-    workspace = runner.build_evidence_checkpoint(workspace)
-    initial_cluster = workspace.evidence_checkpoint.selected_cluster_id
-
-    workspace = runner.build_evidence_checkpoint(
-        workspace,
-        excluded_signal_ids=["energy-1", "macro-1"],
-    )
-
-    assert workspace.evidence_checkpoint.selected_cluster_id != initial_cluster
-    assert workspace.evidence_checkpoint.excluded_signal_ids == ["energy-1", "macro-1"]
+def _complete(runner: StrategicSwarmRunner, review):
+    current = review
+    while current.status != "completed":
+        current = runner.approve_review_step(current)
+    return current
 
 
-def test_workspace_implication_rerun_rebuilds_report_only(tmp_path) -> None:
-    runner, workspace = _workspace(tmp_path)
-    workspace = runner.rerun_from_checkpoint(workspace, "brief")
-    workspace = runner.apply_implication_edits(
-        workspace,
-        implications=[
-            {
-                **workspace.implications_checkpoint.market_implications[0].model_dump(mode="json"),
-                "target": "Edited energy beneficiaries",
-            }
-        ],
-        actions=[item.model_dump(mode="json") for item in workspace.implications_checkpoint.action_recommendations],
+def test_review_session_starts_on_ingest_with_signal_preview(tmp_path) -> None:
+    _runner, review = _start_review(tmp_path)
+
+    assert review.current_node_id == "ingest_signals"
+    assert review.steps[0].status == "paused"
+    assert len(review.steps[0].preview_payload["signals"]) >= 3
+    assert review.steps[1].status == "pending"
+
+
+def test_review_session_normalize_edits_update_cluster_selection(tmp_path) -> None:
+    runner, review = _start_review(tmp_path)
+    review = _advance_to(runner, review, "normalize_events")
+    initial_cluster_id = review.steps[1].editable_payload["selected_cluster_id"]
+
+    review = runner.apply_review_edits(
+        review,
+        edits={"excluded_signal_ids": ["energy-1", "macro-1"], "selected_cluster_id": None},
     )
 
-    assert workspace.report_checkpoint.status == "stale"
-
-    workspace = runner.rerun_from_checkpoint(workspace, "implications")
-
-    assert workspace.report_checkpoint.final_report is not None
-    assert workspace.implications_checkpoint.market_implications[0].target == "Edited energy beneficiaries"
+    current = next(step for step in review.steps if step.node_id == "normalize_events")
+    assert sorted(current.editable_payload["excluded_signal_ids"]) == ["energy-1", "macro-1"]
+    assert current.preview_payload["selected_cluster_id"] != initial_cluster_id
 
 
-def test_workspace_report_edits_do_not_invalidate_upstream(tmp_path) -> None:
-    runner, workspace = _workspace(tmp_path)
-    workspace = runner.rerun_from_checkpoint(workspace, "brief")
-    workspace = runner.apply_report_edits(
-        workspace,
-        headline="Custom headline",
-        executive_summary="Custom summary",
+def test_review_session_situation_edits_flow_into_report_headline(tmp_path) -> None:
+    runner, review = _start_review(tmp_path)
+    review = _advance_to(runner, review, "map_situation")
+
+    review = runner.apply_review_edits(
+        review,
+        edits={
+            "title": "Custom situation title",
+            "summary": "Custom summary for review flow.",
+            "system_under_pressure": "Energy logistics",
+        },
     )
+    review = _complete(runner, review)
 
-    assert workspace.report_checkpoint.final_report.headline == "Custom headline"
-    assert workspace.implications_checkpoint.status in {"generated", "approved"}
+    assert review.final_state["final_report"]["headline"] == "Custom situation title"
+    assert review.final_state["situation_snapshot"]["system_under_pressure"] == "Energy logistics"
+
+
+def test_review_session_implication_and_report_edits_persist(tmp_path) -> None:
+    runner, review = _start_review(tmp_path)
+    review = _advance_to(runner, review, "map_market_implications")
+    first_implication = review.steps[6].editable_payload["market_implications"][0]
+
+    review = runner.apply_review_edits(
+        review,
+        edits={
+            "market_implications": [
+                {
+                    **first_implication,
+                    "target": "Edited energy beneficiaries",
+                }
+            ]
+        },
+    )
+    review = _advance_to(runner, review, "synthesize_report")
+    review = runner.apply_review_edits(
+        review,
+        edits={
+            "headline": "Custom report headline",
+            "executive_summary": "Custom report summary",
+        },
+    )
+    review = _complete(runner, review)
+
+    assert review.final_state["market_implications"][0]["target"] == "Edited energy beneficiaries"
+    assert review.final_state["final_report"]["headline"] == "Custom report headline"
+    assert review.final_state["final_report"]["executive_summary"] == "Custom report summary"
+
+
+def test_review_session_persists_node_aware_trace(tmp_path) -> None:
+    runner, review = _start_review(tmp_path)
+    review = _complete(runner, review)
+
+    trace_path = tmp_path / "outputs" / "topic_chat" / review.selected_run_id / "trace.json"
+    payload = json.loads(trace_path.read_text())
+
+    assert len(payload["steps"]) == 10
+    assert payload["steps"][0]["node_id"] == "ingest_signals"
+    assert payload["steps"][-1]["node_id"] == "remember_situation"
+    assert len(payload["snapshots"]) == 11

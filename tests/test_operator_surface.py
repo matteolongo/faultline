@@ -1,14 +1,15 @@
 from faultline.graph.runner import StrategicSwarmRunner
 from faultline.presentation.operator_surface import (
     available_demo_scenarios,
+    current_review_step,
     list_recent_runs,
     load_outcome_json,
     load_outcome_markdown,
     load_report_markdown,
     parse_operator_datetime,
+    review_toc_rows,
     run_and_summarize,
     summarize_final_state,
-    workspace_checkpoint_rows,
 )
 from faultline.utils.io import write_json
 
@@ -186,16 +187,61 @@ def test_operator_surface_summarizes_topic_chat_run(tmp_path) -> None:
     assert payload["report_json"]["deep_dive_objective"]
 
 
-def test_operator_surface_formats_workspace_rows() -> None:
-    rows = workspace_checkpoint_rows(
+def test_operator_surface_formats_review_rows() -> None:
+    rows = review_toc_rows(
         {
-            "current_stage": "evidence",
-            "stages": ["brief", "evidence", "report"],
-            "brief_checkpoint": {"status": "approved"},
-            "evidence_checkpoint": {"status": "generated"},
-            "report_checkpoint": {"status": "stale"},
+            "session_id": "session-1",
+            "thread_id": "thread-1",
+            "run_mode": "demo",
+            "current_node_id": "normalize_events",
+            "approved_nodes": ["ingest_signals"],
+            "state_snapshots": [{}],
+            "steps": [
+                {
+                    "node_id": "ingest_signals",
+                    "title": "Ingest Signals",
+                    "status": "approved",
+                    "changed_keys": ["raw_signals"],
+                    "artifact_summary": "3 signals",
+                },
+                {
+                    "node_id": "normalize_events",
+                    "title": "Normalize Events",
+                    "status": "paused",
+                    "changed_keys": ["normalized_events", "event_clusters"],
+                    "artifact_summary": "2 events / 1 clusters",
+                },
+            ],
+        }
+    )
+    step = current_review_step(
+        {
+            "session_id": "session-1",
+            "thread_id": "thread-1",
+            "run_mode": "demo",
+            "current_node_id": "normalize_events",
+            "approved_nodes": ["ingest_signals"],
+            "state_snapshots": [{}],
+            "steps": [
+                {
+                    "node_id": "ingest_signals",
+                    "title": "Ingest Signals",
+                    "status": "approved",
+                    "changed_keys": ["raw_signals"],
+                    "artifact_summary": "3 signals",
+                },
+                {
+                    "node_id": "normalize_events",
+                    "title": "Normalize Events",
+                    "status": "paused",
+                    "changed_keys": ["normalized_events", "event_clusters"],
+                    "artifact_summary": "2 events / 1 clusters",
+                },
+            ],
         }
     )
 
-    assert rows[0] == {"stage": "brief", "status": "approved", "current": False}
-    assert rows[1] == {"stage": "evidence", "status": "generated", "current": True}
+    assert rows[0]["node_id"] == "ingest_signals"
+    assert rows[1]["status"] == "paused"
+    assert rows[1]["changed_key_count"] == 2
+    assert step["node_id"] == "normalize_events"

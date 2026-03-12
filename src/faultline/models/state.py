@@ -73,6 +73,8 @@ class FaultlineState(TypedDict, total=False):
     implications_checkpoint: ImplicationsCheckpoint
     report_checkpoint: ReportCheckpoint
     raw_signals: list[RawSignal]
+    included_signal_ids: list[str]
+    excluded_signal_ids: list[str]
     normalized_events: list[SignalEvent]
     event_clusters: list[EventCluster]
     selected_cluster: EventCluster | None

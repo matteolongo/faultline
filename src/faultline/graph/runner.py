@@ -3,46 +3,49 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
 from faultline.evaluation.rubric import evaluate_report
-from faultline.graph.workflow import StrategicSwarmWorkflow
+from faultline.graph.review import build_review_steps, coerce_review_session
+from faultline.graph.workflow import WORKFLOW_NODE_ORDER, StrategicSwarmWorkflow
 from faultline.intake import TopicChatIntake
 from faultline.models import (
     ActionRecommendation,
-    BriefCheckpoint,
     ChatIntakeSession,
     EventCluster,
-    EvidenceCheckpoint,
     FinalReport,
-    ImplicationsCheckpoint,
     MarketImplication,
+    NodeReviewSession,
     OperatorPolicyConfig,
-    OperatorWorkspaceSession,
     OutcomeRecord,
     PortfolioPosition,
     Prediction,
     PublishedReport,
     RawSignal,
-    ReportCheckpoint,
     ResearchBrief,
-    SituationCheckpoint,
+    SituationSnapshot,
     TopicPrompt,
     WatchlistEntry,
 )
-from faultline.persistence.store import SignalStore, make_dead_letter
+from faultline.persistence.store import SignalStore
 from faultline.prediction import OutcomeEvaluator
-from faultline.providers.base import ProviderError, SignalProvider
+from faultline.providers.base import SignalProvider
 from faultline.providers.live import WebSearchEnricher
 from faultline.providers.registry import build_live_providers
 from faultline.providers.sample import SampleScenarioRepository
 from faultline.synthesis.report_builder import render_markdown, render_outcome_markdown
 from faultline.utils.env import bootstrap_env
-from faultline.utils.io import (
-    ensure_directory,
-    serialize_model,
-    write_json,
-    write_text,
+from faultline.utils.io import ensure_directory, serialize_model, write_json, write_text
+
+REVIEW_CHECKPOINTER = MemorySaver(
+    serde=JsonPlusSerializer(
+        pickle_fallback=True,
+        allowed_msgpack_modules=True,
+    )
 )
 
 
@@ -66,8 +69,16 @@ class StrategicSwarmRunner:
         self.live_providers = live_providers or build_live_providers()
         self.web_search_provider = web_search_provider or WebSearchEnricher()
         self.topic_chat_intake = topic_chat_intake or TopicChatIntake()
-        self.workflow_engine = StrategicSwarmWorkflow(store=self.store, live_providers=self.live_providers)
+        self.workflow_engine = StrategicSwarmWorkflow(
+            store=self.store,
+            live_providers=self.live_providers,
+            web_search_provider=self.web_search_provider,
+        )
         self.workflow = self.workflow_engine.build()
+        self.review_workflow = self.workflow_engine.build(
+            checkpointer=REVIEW_CHECKPOINTER,
+            interrupt_after=list(WORKFLOW_NODE_ORDER),
+        )
         self.outcome_evaluator = OutcomeEvaluator()
 
     def run_demo(
@@ -174,340 +185,6 @@ class StrategicSwarmRunner:
     ) -> ChatIntakeSession:
         return self.topic_chat_intake.answer_question(session, answer)
 
-    def initialize_workspace(
-        self,
-        session: ChatIntakeSession | dict,
-        *,
-        operator_policy_config: OperatorPolicyConfig | dict | None = None,
-        start_at: datetime | None = None,
-        end_at: datetime | None = None,
-    ) -> OperatorWorkspaceSession:
-        intake_session = (
-            session if isinstance(session, ChatIntakeSession) else ChatIntakeSession.model_validate(session)
-        )
-        policy = (
-            operator_policy_config
-            if isinstance(operator_policy_config, OperatorPolicyConfig) or operator_policy_config is None
-            else OperatorPolicyConfig.model_validate(operator_policy_config)
-        )
-        return OperatorWorkspaceSession(
-            workspace_id=uuid4().hex[:12],
-            current_stage="brief",
-            window_start=start_at.isoformat() if start_at else None,
-            window_end=end_at.isoformat() if end_at else None,
-            operator_policy_config=policy,
-            brief_checkpoint=BriefCheckpoint(
-                status="generated",
-                topic_prompt=intake_session.topic_prompt,
-                chat_intake_session=intake_session,
-                computed_brief=intake_session.brief,
-                diagnostics={"brief_status": intake_session.status},
-                provenance=[f"Initialized workspace from topic '{intake_session.topic_prompt.topic}'."],
-            ),
-        )
-
-    def apply_brief_edits(
-        self,
-        workspace: OperatorWorkspaceSession | dict,
-        brief: ResearchBrief | dict,
-    ) -> OperatorWorkspaceSession:
-        session = self._coerce_workspace(workspace)
-        updated = brief if isinstance(brief, ResearchBrief) else ResearchBrief.model_validate(brief)
-        session.brief_checkpoint.computed_brief = updated
-        session.brief_checkpoint.approved_brief = None
-        session.brief_checkpoint.status = "generated"
-        session.current_stage = "brief"
-        return self._mark_downstream_stale(session, "brief")
-
-    def apply_evidence_edits(
-        self,
-        workspace: OperatorWorkspaceSession | dict,
-        *,
-        retrieval_questions: list[str],
-        excluded_signal_ids: list[str],
-        selected_cluster_id: str | None,
-    ) -> OperatorWorkspaceSession:
-        session = self._coerce_workspace(workspace)
-        session.evidence_checkpoint.retrieval_questions = retrieval_questions
-        session.evidence_checkpoint.excluded_signal_ids = excluded_signal_ids
-        session.evidence_checkpoint.selected_cluster_id = selected_cluster_id
-        session.evidence_checkpoint.approved_cluster_id = None
-        session.evidence_checkpoint.status = "generated"
-        session.current_stage = "evidence"
-        return self._mark_downstream_stale(session, "evidence")
-
-    def apply_situation_edits(
-        self,
-        workspace: OperatorWorkspaceSession | dict,
-        *,
-        title: str,
-        summary: str,
-        system_under_pressure: str,
-    ) -> OperatorWorkspaceSession:
-        session = self._coerce_workspace(workspace)
-        snapshot = session.situation_checkpoint.situation_snapshot
-        if snapshot is None:
-            raise ValueError("Situation checkpoint is not available.")
-        snapshot.title = title
-        snapshot.summary = summary
-        snapshot.system_under_pressure = system_under_pressure
-        session.situation_checkpoint.status = "generated"
-        session.current_stage = "situation"
-        return self._mark_downstream_stale(session, "situation")
-
-    def apply_implication_edits(
-        self,
-        workspace: OperatorWorkspaceSession | dict,
-        *,
-        implications: list[dict] | list,
-        actions: list[dict] | list,
-    ) -> OperatorWorkspaceSession:
-        session = self._coerce_workspace(workspace)
-        session.implications_checkpoint.market_implications = [
-            item if isinstance(item, MarketImplication) else MarketImplication.model_validate(item)
-            for item in implications
-        ]
-        session.implications_checkpoint.action_recommendations = [
-            item if isinstance(item, ActionRecommendation) else ActionRecommendation.model_validate(item)
-            for item in actions
-        ]
-        session.implications_checkpoint.status = "generated"
-        session.current_stage = "implications"
-        return self._mark_downstream_stale(session, "implications")
-
-    def apply_report_edits(
-        self,
-        workspace: OperatorWorkspaceSession | dict,
-        *,
-        headline: str,
-        executive_summary: str,
-    ) -> OperatorWorkspaceSession:
-        session = self._coerce_workspace(workspace)
-        report = session.report_checkpoint.final_report
-        if report is None:
-            raise ValueError("Report checkpoint is not available.")
-        report.headline = headline
-        report.executive_summary = executive_summary
-        session.report_checkpoint.report_markdown = render_markdown(report)
-        session.report_checkpoint.status = "generated"
-        session.current_stage = "report"
-        return session
-
-    def build_evidence_checkpoint(
-        self,
-        workspace: OperatorWorkspaceSession | dict,
-        *,
-        retrieval_questions: list[str] | None = None,
-        excluded_signal_ids: list[str] | None = None,
-        selected_cluster_id: str | None = None,
-        start_at: datetime | None = None,
-        end_at: datetime | None = None,
-    ) -> OperatorWorkspaceSession:
-        session = self._coerce_workspace(workspace)
-        brief = self._effective_brief(session)
-        if brief is None:
-            raise ValueError("Brief checkpoint must exist before evidence generation.")
-        start_at, end_at = self._resolve_workspace_window(session, start_at=start_at, end_at=end_at)
-        questions = (
-            retrieval_questions
-            or session.evidence_checkpoint.retrieval_questions
-            or self.topic_chat_intake.build_retrieval_questions(brief)
-        )
-        excluded_ids = excluded_signal_ids or session.evidence_checkpoint.excluded_signal_ids
-        raw_signals, provider_counts = self._retrieve_signals_for_brief(
-            brief,
-            questions,
-            start_at=start_at,
-            end_at=end_at,
-        )
-        filtered_signals = [item for item in raw_signals if item.id not in set(excluded_ids)]
-        events, clusters, normalize_diag = self.workflow_engine.normalizer.normalize(
-            filtered_signals,
-            known_dedupe_hashes=set(),
-            prior_story_counts={},
-        )
-        selected_id = selected_cluster_id or session.evidence_checkpoint.selected_cluster_id
-        valid_cluster_ids = {item.cluster_id for item in clusters}
-        if selected_id and selected_id not in valid_cluster_ids:
-            selected_id = None
-        if not selected_id and clusters:
-            selected_id = clusters[0].cluster_id
-        session.evidence_checkpoint = EvidenceCheckpoint(
-            status="generated",
-            retrieval_questions=questions,
-            raw_signals=raw_signals,
-            normalized_events=events,
-            candidate_clusters=clusters,
-            selected_cluster_id=selected_id,
-            approved_cluster_id=session.evidence_checkpoint.approved_cluster_id,
-            excluded_signal_ids=excluded_ids,
-            included_signal_ids=[item.id for item in filtered_signals],
-            diagnostics={
-                "source_counts": provider_counts,
-                "cluster_count": len(clusters),
-                "edited_retrieval_question_count": len(questions),
-                "included_signal_count": len(filtered_signals),
-                "excluded_signal_count": len(excluded_ids),
-                **normalize_diag,
-            },
-            provenance=[
-                f"Generated {len(questions)} retrieval questions.",
-                f"Retained {len(filtered_signals)} of {len(raw_signals)} raw signals after exclusions.",
-                f"Built {len(clusters)} candidate clusters.",
-            ],
-        )
-        session.current_stage = "evidence"
-        return self._mark_downstream_stale(session, "evidence")
-
-    def build_situation_checkpoint(
-        self,
-        workspace: OperatorWorkspaceSession | dict,
-    ) -> OperatorWorkspaceSession:
-        session = self._coerce_workspace(workspace)
-        cluster = self._selected_cluster(session.evidence_checkpoint)
-        if cluster is None:
-            raise ValueError("Evidence checkpoint must select a cluster before situation generation.")
-        calibration_signals = self.store.load_calibration_signals()
-        related_situations = self.workflow_engine.memory.search(cluster, exclude_id=cluster.cluster_id)
-        cluster_events = [
-            item for item in session.evidence_checkpoint.normalized_events if item.cluster_id == cluster.cluster_id
-        ]
-        snapshot = self.workflow_engine.mapper.map(cluster, cluster_events, related_situations)
-        predictions, scenario_tree, warnings = self.workflow_engine.prediction_engine.predict(
-            snapshot,
-            cluster,
-            calibration_signals,
-        )
-        session.situation_checkpoint = SituationCheckpoint(
-            status="generated",
-            related_situations=related_situations,
-            calibration_signals=calibration_signals,
-            situation_snapshot=snapshot,
-            predictions=predictions,
-            scenario_tree=scenario_tree,
-            stage_transition_warnings=warnings,
-            diagnostics={
-                "related_situation_count": len(related_situations),
-                "calibration_signal_count": len(calibration_signals),
-                "prediction_count": len(predictions),
-            },
-            provenance=[
-                f"Selected cluster {cluster.cluster_id}.",
-                f"Mapped situation {snapshot.title}.",
-                f"Generated {len(predictions)} predictions and {len(warnings)} warnings.",
-            ],
-        )
-        session.current_stage = "situation"
-        return self._mark_downstream_stale(session, "situation")
-
-    def build_implications_checkpoint(
-        self,
-        workspace: OperatorWorkspaceSession | dict,
-    ) -> OperatorWorkspaceSession:
-        session = self._coerce_workspace(workspace)
-        cluster = self._selected_cluster(session.evidence_checkpoint)
-        brief = self._effective_brief(session)
-        if cluster is None or brief is None or session.situation_checkpoint.situation_snapshot is None:
-            raise ValueError("Situation checkpoint must exist before implications generation.")
-        implications = self.workflow_engine.market_mapper.map(
-            session.situation_checkpoint.situation_snapshot,
-            session.situation_checkpoint.predictions,
-            cluster,
-            session.situation_checkpoint.calibration_signals,
-        )
-        actions, exits, endangered = self.workflow_engine.action_engine.generate(
-            session.situation_checkpoint.situation_snapshot,
-            implications,
-            session.situation_checkpoint.predictions,
-            session.situation_checkpoint.calibration_signals,
-            brief.positions,
-            brief.watchlist,
-            session.situation_checkpoint.stage_transition_warnings,
-            session.operator_policy_config,
-        )
-        session.implications_checkpoint = ImplicationsCheckpoint(
-            status="generated",
-            market_implications=implications,
-            action_recommendations=actions,
-            exit_signals=exits,
-            endangered_symbols=endangered,
-            diagnostics={
-                "market_implication_count": len(implications),
-                "action_count": len(actions),
-                "exit_count": len(exits),
-            },
-            provenance=[
-                f"Mapped {len(implications)} market implications.",
-                f"Generated {len(actions)} actions and {len(exits)} exits.",
-            ],
-        )
-        session.current_stage = "implications"
-        return self._mark_downstream_stale(session, "implications")
-
-    def build_report_checkpoint(
-        self,
-        workspace: OperatorWorkspaceSession | dict,
-    ) -> OperatorWorkspaceSession:
-        session = self._coerce_workspace(workspace)
-        cluster = self._selected_cluster(session.evidence_checkpoint)
-        brief = self._effective_brief(session)
-        if cluster is None or brief is None or session.situation_checkpoint.situation_snapshot is None:
-            raise ValueError("Implications checkpoint must exist before report generation.")
-        report = self.workflow_engine.report_builder.build(
-            snapshot=session.situation_checkpoint.situation_snapshot,
-            cluster=cluster,
-            related_situations=session.situation_checkpoint.related_situations,
-            calibration_signals=session.situation_checkpoint.calibration_signals,
-            predictions=session.situation_checkpoint.predictions,
-            scenario_tree=session.situation_checkpoint.scenario_tree,
-            stage_transition_warnings=session.situation_checkpoint.stage_transition_warnings,
-            implications=session.implications_checkpoint.market_implications,
-            actions=session.implications_checkpoint.action_recommendations,
-            exits=session.implications_checkpoint.exit_signals,
-            endangered_symbols=session.implications_checkpoint.endangered_symbols,
-            provenance=self._workspace_provenance(session),
-            topic_prompt=session.brief_checkpoint.topic_prompt,
-            research_brief=brief,
-            retrieval_questions=session.evidence_checkpoint.retrieval_questions,
-        )
-        run_payload = self._persist_workspace_run(session, report)
-        session.report_checkpoint = ReportCheckpoint(
-            status="generated",
-            final_report=report,
-            report_markdown=render_markdown(report),
-            run_id=run_payload["run_id"],
-            run_dir=run_payload["run_dir"],
-            diagnostics=run_payload["final_state"].get("diagnostics", {}),
-            provenance=report.provenance,
-        )
-        session.selected_run_id = run_payload["run_id"]
-        session.selected_run_dir = run_payload["run_dir"]
-        session.current_stage = "report"
-        return session
-
-    def rerun_from_checkpoint(
-        self,
-        workspace: OperatorWorkspaceSession | dict,
-        checkpoint: str,
-    ) -> OperatorWorkspaceSession:
-        session = self._coerce_workspace(workspace)
-        session.rerun_lineage.append(f"rerun_from:{checkpoint}")
-        if checkpoint == "brief":
-            session = self.build_evidence_checkpoint(session)
-            session = self.build_situation_checkpoint(session)
-            session = self.build_implications_checkpoint(session)
-            return self.build_report_checkpoint(session)
-        if checkpoint == "evidence":
-            session = self.build_situation_checkpoint(session)
-            session = self.build_implications_checkpoint(session)
-            return self.build_report_checkpoint(session)
-        if checkpoint == "situation":
-            session = self.build_implications_checkpoint(session)
-            return self.build_report_checkpoint(session)
-        if checkpoint in {"implications", "report"}:
-            return self.build_report_checkpoint(session)
-        raise ValueError(f"Unsupported checkpoint: {checkpoint}")
-
     def run_topic_chat(
         self,
         session: ChatIntakeSession | dict,
@@ -516,34 +193,81 @@ class StrategicSwarmRunner:
         start_at: datetime | None = None,
         end_at: datetime | None = None,
     ) -> dict:
-        intake_session = (
-            session if isinstance(session, ChatIntakeSession) else ChatIntakeSession.model_validate(session)
-        )
+        intake_session = self._coerce_topic_session(session)
         if not self.topic_chat_intake.is_ready(intake_session):
             raise ValueError(intake_session.current_question or "Topic chat is not ready to run.")
-        workspace = self.initialize_workspace(
-            intake_session,
-            operator_policy_config=operator_policy_config,
+        return self._run(
+            initial_state=self._topic_chat_initial_state(
+                intake_session,
+                operator_policy_config=operator_policy_config,
+                start_at=start_at,
+                end_at=end_at,
+            )
+        )
+
+    def start_review_session(
+        self,
+        *,
+        mode: str,
+        scenario: str | None = None,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        lookback_minutes: int | None = None,
+        run_id: str | None = None,
+        topic_session: ChatIntakeSession | dict | None = None,
+        operator_policy_config: OperatorPolicyConfig | dict | None = None,
+    ) -> NodeReviewSession:
+        initial_state = self._initial_state_for_mode(
+            mode=mode,
+            scenario=scenario,
             start_at=start_at,
             end_at=end_at,
+            lookback_minutes=lookback_minutes,
+            run_id=run_id,
+            topic_session=topic_session,
+            operator_policy_config=operator_policy_config,
         )
-        workspace.brief_checkpoint.status = "approved"
-        workspace.brief_checkpoint.approved_brief = intake_session.brief
-        workspace = self.build_evidence_checkpoint(workspace, start_at=start_at, end_at=end_at)
-        workspace.evidence_checkpoint.status = "approved"
-        workspace.evidence_checkpoint.approved_cluster_id = workspace.evidence_checkpoint.selected_cluster_id
-        workspace = self.build_situation_checkpoint(workspace)
-        workspace.situation_checkpoint.status = "approved"
-        workspace = self.build_implications_checkpoint(workspace)
-        workspace.implications_checkpoint.status = "approved"
-        workspace = self.build_report_checkpoint(workspace)
-        workspace.report_checkpoint.status = "approved"
-        return {
-            "run_id": workspace.report_checkpoint.run_id,
-            "scenario_id": None,
-            "run_dir": workspace.report_checkpoint.run_dir,
-            "final_state": self._workspace_final_state(workspace),
-        }
+        return self._start_review_session(initial_state)
+
+    def load_review_session(self, session: NodeReviewSession | dict[str, Any]) -> NodeReviewSession:
+        current = coerce_review_session(session)
+        current.steps = build_review_steps(current)
+        return current
+
+    def apply_review_edits(
+        self,
+        session: NodeReviewSession | dict[str, Any],
+        *,
+        edits: dict[str, Any],
+    ) -> NodeReviewSession:
+        current = coerce_review_session(session)
+        node_id = current.current_node_id
+        if node_id is None:
+            raise ValueError("Review session is already complete.")
+        config = self._review_config(current)
+        graph_state = self.review_workflow.get_state(config).values
+        updates = self._review_node_updates(node_id, graph_state, edits)
+        self.review_workflow.update_state(config, updates, as_node=node_id)
+        current.state_snapshots[-1] = serialize_model(self.review_workflow.get_state(config).values)
+        return self.load_review_session(current)
+
+    def approve_review_step(self, session: NodeReviewSession | dict[str, Any]) -> NodeReviewSession:
+        current = coerce_review_session(session)
+        node_id = current.current_node_id
+        if node_id is None:
+            return current
+        if node_id not in current.approved_nodes:
+            current.approved_nodes.append(node_id)
+        config = self._review_config(current)
+
+        if node_id == WORKFLOW_NODE_ORDER[-1]:
+            final_state = self.review_workflow.get_state(config).values
+            return self._finalize_review_session(current, final_state)
+
+        list(self.review_workflow.stream(None, config=config))
+        current.state_snapshots.append(serialize_model(self.review_workflow.get_state(config).values))
+        current.current_node_id = self._current_node_id_from_snapshots(current)
+        return self.load_review_session(current)
 
     def ingest_window(self, *, start_at: datetime, end_at: datetime) -> dict:
         result = self.run_live(start_at=start_at, end_at=end_at)
@@ -670,17 +394,17 @@ class StrategicSwarmRunner:
         )
         processed_runs: list[dict] = []
         for item in candidates:
-            run_id = item["run_id"]
-            predictions = self.store.load_predictions_for_run(run_id)
+            current_run_id = item["run_id"]
+            predictions = self.store.load_predictions_for_run(current_run_id)
             if not predictions:
                 continue
             outcomes = self.outcome_evaluator.score(predictions, signals)
-            self.store.save_outcome_records(run_id=run_id, outcomes=outcomes)
+            self.store.save_outcome_records(run_id=current_run_id, outcomes=outcomes)
             summary = self._summarize_outcomes(outcomes)
-            self._persist_outcomes(run_id=run_id, outcomes=outcomes, summary=summary)
+            self._persist_outcomes(run_id=current_run_id, outcomes=outcomes, summary=summary)
             processed_runs.append(
                 {
-                    "run_id": run_id,
+                    "run_id": current_run_id,
                     "run_mode": item["run_mode"],
                     "scenario_id": item["scenario_id"],
                     "summary": summary,
@@ -716,234 +440,298 @@ class StrategicSwarmRunner:
             providers.append((provider.provider_name, provider.source_family, configured))
         return [item.model_dump(mode="json") for item in self.store.provider_health(providers)]
 
-    def _coerce_workspace(self, workspace: OperatorWorkspaceSession | dict) -> OperatorWorkspaceSession:
-        return (
-            workspace
-            if isinstance(workspace, OperatorWorkspaceSession)
-            else OperatorWorkspaceSession.model_validate(workspace)
+    def _run(self, *, initial_state: dict[str, Any]) -> dict:
+        session = self._start_review_session(initial_state)
+        while session.status != "completed":
+            session = self.approve_review_step(session)
+        return {
+            "run_id": session.selected_run_id,
+            "scenario_id": session.scenario_id,
+            "run_dir": session.selected_run_dir,
+            "final_state": self._restore_runtime_state(session.final_state),
+        }
+
+    def _start_review_session(self, initial_state: dict[str, Any]) -> NodeReviewSession:
+        session_id = uuid4().hex[:12]
+        thread_id = f"review-{session_id}"
+        normalized_state = self._normalize_initial_state(initial_state, run_id=session_id)
+        config = {"configurable": {"thread_id": thread_id}}
+        list(self.review_workflow.stream(normalized_state, config=config))
+        session = NodeReviewSession(
+            session_id=session_id,
+            thread_id=thread_id,
+            run_mode=normalized_state.get("run_mode", "live"),
+            scenario_id=normalized_state.get("scenario_id"),
+            window_start=normalized_state.get("window_start"),
+            window_end=normalized_state.get("window_end"),
+            topic_prompt=normalized_state.get("topic_prompt"),
+            research_brief=normalized_state.get("research_brief"),
+            chat_intake_session=normalized_state.get("chat_intake_session"),
+            current_node_id=WORKFLOW_NODE_ORDER[0],
+            state_snapshots=[
+                serialize_model(normalized_state),
+                serialize_model(self.review_workflow.get_state(config).values),
+            ],
+            diagnostics={"run_id": session_id},
         )
+        session.steps = build_review_steps(session)
+        return session
 
-    def _effective_brief(self, workspace: OperatorWorkspaceSession) -> ResearchBrief | None:
-        return workspace.brief_checkpoint.approved_brief or workspace.brief_checkpoint.computed_brief
-
-    def _resolve_workspace_window(
+    def _initial_state_for_mode(
         self,
-        workspace: OperatorWorkspaceSession,
+        *,
+        mode: str,
+        scenario: str | None = None,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        lookback_minutes: int | None = None,
+        run_id: str | None = None,
+        topic_session: ChatIntakeSession | dict | None = None,
+        operator_policy_config: OperatorPolicyConfig | dict | None = None,
+    ) -> dict[str, Any]:
+        if mode == "demo":
+            if not scenario:
+                raise ValueError("Scenario is required for demo mode.")
+            return {
+                "scenario_id": scenario,
+                "run_mode": "demo",
+                "operator_policy_config": operator_policy_config,
+            }
+        if mode == "topic_chat":
+            if not topic_session:
+                raise ValueError("Topic chat mode requires a prepared topic session.")
+            return self._topic_chat_initial_state(
+                self._coerce_topic_session(topic_session),
+                operator_policy_config=operator_policy_config,
+                start_at=start_at,
+                end_at=end_at,
+            )
+        if mode == "live":
+            if not start_at or not end_at:
+                raise ValueError("Live mode requires start_at and end_at.")
+            return {
+                "run_mode": "live",
+                "window_start": start_at.isoformat(),
+                "window_end": end_at.isoformat(),
+                "operator_policy_config": operator_policy_config,
+            }
+        if mode == "latest":
+            lookback = lookback_minutes or int(os.getenv("FAULTLINE_DEFAULT_LOOKBACK_MINUTES", "60"))
+            resolved_end = datetime.now(UTC)
+            resolved_start = resolved_end - timedelta(minutes=lookback)
+            return {
+                "run_mode": "live",
+                "window_start": resolved_start.isoformat(),
+                "window_end": resolved_end.isoformat(),
+                "operator_policy_config": operator_policy_config,
+            }
+        if mode == "replay":
+            if run_id:
+                previous = self.store.get_run_state(run_id)
+                if not previous:
+                    raise ValueError(f"Unknown run_id: {run_id}")
+                return {"run_mode": "replay", "raw_signals": previous.get("raw_signals", [])}
+            if not start_at or not end_at:
+                raise ValueError("Replay mode requires run_id or start_at/end_at.")
+            return {
+                "run_mode": "replay",
+                "window_start": start_at.isoformat(),
+                "window_end": end_at.isoformat(),
+                "raw_signals": self.store.load_raw_signals_for_window(start_at, end_at),
+            }
+        raise ValueError(f"Unsupported review mode: {mode}")
+
+    def _normalize_initial_state(self, initial_state: dict[str, Any], *, run_id: str) -> dict[str, Any]:
+        normalized = dict(initial_state)
+        if "raw_signals" in normalized:
+            normalized["raw_signals"] = [
+                signal if isinstance(signal, RawSignal) else RawSignal.model_validate(signal)
+                for signal in normalized["raw_signals"]
+            ]
+        normalized["portfolio_positions"] = [
+            item if isinstance(item, PortfolioPosition) else PortfolioPosition.model_validate(item)
+            for item in normalized.get("portfolio_positions", [])
+        ]
+        normalized["watchlist"] = [
+            item if isinstance(item, WatchlistEntry) else WatchlistEntry.model_validate(item)
+            for item in normalized.get("watchlist", [])
+        ]
+        if normalized.get("operator_policy_config") is not None and not isinstance(
+            normalized["operator_policy_config"], OperatorPolicyConfig
+        ):
+            normalized["operator_policy_config"] = OperatorPolicyConfig.model_validate(
+                normalized["operator_policy_config"]
+            )
+        if normalized.get("topic_prompt") is not None and not isinstance(normalized["topic_prompt"], TopicPrompt):
+            normalized["topic_prompt"] = TopicPrompt.model_validate(normalized["topic_prompt"])
+        if normalized.get("research_brief") is not None and not isinstance(normalized["research_brief"], ResearchBrief):
+            normalized["research_brief"] = ResearchBrief.model_validate(normalized["research_brief"])
+        if normalized.get("chat_intake_session") is not None and not isinstance(
+            normalized["chat_intake_session"], ChatIntakeSession
+        ):
+            normalized["chat_intake_session"] = ChatIntakeSession.model_validate(normalized["chat_intake_session"])
+        normalized["diagnostics"] = {**normalized.get("diagnostics", {}), "run_id": run_id}
+        return normalized
+
+    def _coerce_topic_session(self, session: ChatIntakeSession | dict[str, Any]) -> ChatIntakeSession:
+        return session if isinstance(session, ChatIntakeSession) else ChatIntakeSession.model_validate(session)
+
+    def _topic_chat_initial_state(
+        self,
+        session: ChatIntakeSession,
+        *,
+        operator_policy_config: OperatorPolicyConfig | dict | None = None,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        resolved_start, resolved_end = self._resolve_topic_chat_window(start_at=start_at, end_at=end_at)
+        brief = session.brief
+        return {
+            "run_mode": "topic_chat",
+            "window_start": resolved_start.isoformat(),
+            "window_end": resolved_end.isoformat(),
+            "portfolio_positions": brief.positions,
+            "watchlist": brief.watchlist,
+            "operator_policy_config": operator_policy_config,
+            "topic_prompt": session.topic_prompt,
+            "research_brief": brief,
+            "chat_intake_session": session,
+            "retrieval_questions": self.topic_chat_intake.build_retrieval_questions(brief),
+        }
+
+    def _resolve_topic_chat_window(
+        self,
         *,
         start_at: datetime | None = None,
         end_at: datetime | None = None,
     ) -> tuple[datetime, datetime]:
         default_start, default_end = self.topic_chat_intake.default_window()
-        resolved_start = (
-            start_at
-            or (datetime.fromisoformat(workspace.window_start) if workspace.window_start else None)
-            or default_start
-        )
-        resolved_end = (
-            end_at or (datetime.fromisoformat(workspace.window_end) if workspace.window_end else None) or default_end
-        )
-        workspace.window_start = resolved_start.isoformat()
-        workspace.window_end = resolved_end.isoformat()
-        return resolved_start, resolved_end
+        return start_at or default_start, end_at or default_end
 
-    def _retrieve_signals_for_brief(
-        self,
-        brief: ResearchBrief,
-        retrieval_questions: list[str],
-        *,
-        start_at: datetime,
-        end_at: datetime,
-    ) -> tuple[list[RawSignal], dict[str, int]]:
-        raw_signals: list[RawSignal] = []
-        provider_counts: dict[str, int] = {}
-        story_key = self._topic_story_key(brief)
-        synthesis_count = 0
-        for question in retrieval_questions:
-            try:
-                fetched = self.web_search_provider.query(question, story_key=story_key, fetched_at=end_at)
-                normalized = [
-                    item if isinstance(item, RawSignal) else RawSignal.model_validate(item) for item in fetched
-                ]
-                raw_signals.extend(normalized)
-                synthesis_count += len(normalized)
-            except ProviderError as exc:
-                self.store.save_dead_letter(
-                    make_dead_letter(
-                        provider_name=self.web_search_provider.provider_name,
-                        window_start=start_at,
-                        window_end=end_at,
-                        error_type="provider_error",
-                        error_message=str(exc),
-                    )
-                )
-        provider_counts[self.web_search_provider.provider_name] = synthesis_count
-        for provider in self.live_providers:
-            if getattr(provider, "source_family", "") not in {"market", "macro"}:
-                continue
-            try:
-                fetched = provider.fetch_window(start_at, end_at)
-                normalized = [
-                    item if isinstance(item, RawSignal) else RawSignal.model_validate(item) for item in fetched
-                ]
-                raw_signals.extend(normalized)
-                provider_counts[provider.provider_name] = len(normalized)
-            except ProviderError as exc:
-                self.store.save_dead_letter(
-                    make_dead_letter(
-                        provider_name=provider.provider_name,
-                        window_start=start_at,
-                        window_end=end_at,
-                        error_type="provider_error",
-                        error_message=str(exc),
-                    )
-                )
-                provider_counts[provider.provider_name] = 0
-        return raw_signals, provider_counts
+    def _review_config(self, session: NodeReviewSession) -> dict[str, Any]:
+        return {"configurable": {"thread_id": session.thread_id}}
 
-    def _selected_cluster(self, checkpoint: EvidenceCheckpoint) -> EventCluster | None:
-        target_id = checkpoint.approved_cluster_id or checkpoint.selected_cluster_id
-        if not target_id:
+    def _current_node_id_from_snapshots(self, session: NodeReviewSession) -> str | None:
+        index = len(session.state_snapshots) - 2
+        if session.status == "completed" or index < 0 or index >= len(WORKFLOW_NODE_ORDER):
             return None
-        return next((item for item in checkpoint.candidate_clusters if item.cluster_id == target_id), None)
+        return WORKFLOW_NODE_ORDER[index]
 
-    def _mark_downstream_stale(self, workspace: OperatorWorkspaceSession, checkpoint: str) -> OperatorWorkspaceSession:
-        order = workspace.stages
-        index = order.index(checkpoint)
-        for downstream in order[index + 1 :]:
-            current = getattr(workspace, f"{downstream}_checkpoint")
-            if current.status != "not_started":
-                current.status = "stale"
-        return workspace
+    def _review_node_updates(self, node_id: str, graph_state: dict[str, Any], edits: dict[str, Any]) -> dict[str, Any]:
+        if node_id == "normalize_events":
+            working_state = {
+                **graph_state,
+                "excluded_signal_ids": edits.get("excluded_signal_ids", graph_state.get("excluded_signal_ids", [])),
+            }
+            updates = self.workflow_engine.normalize_events(working_state)
+            selected_cluster_id = edits.get("selected_cluster_id")
+            if selected_cluster_id:
+                selected_cluster = next(
+                    (
+                        cluster
+                        for cluster in updates.get("event_clusters", [])
+                        if cluster.cluster_id == selected_cluster_id
+                    ),
+                    None,
+                )
+                if selected_cluster is not None:
+                    updates["selected_cluster"] = selected_cluster
+            return updates
+        if node_id == "map_situation":
+            snapshot = graph_state.get("situation_snapshot")
+            if snapshot is None:
+                return {}
+            validated = (
+                snapshot if isinstance(snapshot, SituationSnapshot) else SituationSnapshot.model_validate(snapshot)
+            )
+            return {
+                "situation_snapshot": validated.model_copy(
+                    update={
+                        "title": edits.get("title", validated.title),
+                        "summary": edits.get("summary", validated.summary),
+                        "system_under_pressure": edits.get(
+                            "system_under_pressure",
+                            validated.system_under_pressure,
+                        ),
+                    }
+                )
+            }
+        if node_id == "map_market_implications":
+            return {
+                "market_implications": [
+                    item if isinstance(item, MarketImplication) else MarketImplication.model_validate(item)
+                    for item in edits.get("market_implications", graph_state.get("market_implications", []))
+                ]
+            }
+        if node_id == "generate_actions":
+            return {
+                "action_recommendations": [
+                    item if isinstance(item, ActionRecommendation) else ActionRecommendation.model_validate(item)
+                    for item in edits.get("action_recommendations", graph_state.get("action_recommendations", []))
+                ],
+                "exit_signals": [
+                    item if isinstance(item, ActionRecommendation) else ActionRecommendation.model_validate(item)
+                    for item in edits.get("exit_signals", graph_state.get("exit_signals", []))
+                ],
+            }
+        if node_id == "synthesize_report":
+            report = graph_state.get("final_report")
+            if report is None:
+                return {}
+            validated = report if isinstance(report, FinalReport) else FinalReport.model_validate(report)
+            return {
+                "final_report": validated.model_copy(
+                    update={
+                        "headline": edits.get("headline", validated.headline),
+                        "executive_summary": edits.get("executive_summary", validated.executive_summary),
+                    }
+                )
+            }
+        return {}
 
-    def _workspace_provenance(self, workspace: OperatorWorkspaceSession) -> list[str]:
-        brief = self._effective_brief(workspace)
-        topic = (
-            workspace.brief_checkpoint.topic_prompt.topic
-            if workspace.brief_checkpoint.topic_prompt
-            else "unknown topic"
-        )
-        lines = [
-            f"Topic chat started from '{topic}'.",
-            f"Workspace stage: {workspace.current_stage}.",
-        ]
-        if brief is not None:
-            lines.append(f"Interpreted objective: {self.topic_chat_intake.describe_brief(brief)}")
-            lines.extend(f"Assumption: {item}" for item in brief.assumptions)
-        lines.extend(workspace.evidence_checkpoint.provenance)
-        lines.extend(workspace.situation_checkpoint.provenance)
-        lines.extend(workspace.implications_checkpoint.provenance)
-        if workspace.rerun_lineage:
-            lines.extend(f"Rerun lineage: {item}" for item in workspace.rerun_lineage)
-        return lines
+    def _finalize_review_session(
+        self,
+        session: NodeReviewSession,
+        final_state: dict[str, Any],
+    ) -> NodeReviewSession:
+        session.status = "completed"
+        session.current_node_id = None
+        session.final_state = serialize_model(final_state)
+        session.steps = build_review_steps(session)
+        run_payload = self._persist_review_run(session, final_state)
+        session.selected_run_id = run_payload["run_id"]
+        session.selected_run_dir = run_payload["run_dir"]
+        return session
 
-    def _workspace_final_state(self, workspace: OperatorWorkspaceSession) -> dict:
-        report = workspace.report_checkpoint.final_report
-        situation = workspace.situation_checkpoint
-        evidence = workspace.evidence_checkpoint
-        diagnostics = {
-            "publish_decision": report.publication_status if report is not None else "monitor_only",
-            "stage": situation.situation_snapshot.stage.stage if situation.situation_snapshot is not None else None,
-            "topic_prompt": workspace.brief_checkpoint.topic_prompt.topic
-            if workspace.brief_checkpoint.topic_prompt
-            else "",
-            "deep_dive_objective": self.topic_chat_intake.describe_brief(self._effective_brief(workspace))
-            if self._effective_brief(workspace)
-            else "",
-            "retrieval_questions": evidence.retrieval_questions,
-            "intake_assumptions": self._effective_brief(workspace).assumptions
-            if self._effective_brief(workspace)
-            else [],
-            "topic_chat_turn_count": len(workspace.brief_checkpoint.chat_intake_session.turns)
-            if workspace.brief_checkpoint.chat_intake_session
-            else 0,
-            "checkpoint_statuses": {
-                "brief": workspace.brief_checkpoint.status,
-                "evidence": workspace.evidence_checkpoint.status,
-                "situation": workspace.situation_checkpoint.status,
-                "implications": workspace.implications_checkpoint.status,
-                "report": workspace.report_checkpoint.status,
-            },
-            "approved_cluster_id": evidence.approved_cluster_id or evidence.selected_cluster_id,
-            "edited_retrieval_question_count": len(evidence.retrieval_questions),
-            "included_signal_count": len(evidence.included_signal_ids),
-            "excluded_signal_count": len(evidence.excluded_signal_ids),
-            "stale_downstream_flags": {
-                "evidence": workspace.evidence_checkpoint.status == "stale",
-                "situation": workspace.situation_checkpoint.status == "stale",
-                "implications": workspace.implications_checkpoint.status == "stale",
-                "report": workspace.report_checkpoint.status == "stale",
-            },
-            "workspace_payload": workspace.model_dump(mode="json"),
-            **evidence.diagnostics,
-            **situation.diagnostics,
-            **workspace.implications_checkpoint.diagnostics,
-        }
-        return {
-            "topic_prompt": workspace.brief_checkpoint.topic_prompt,
-            "research_brief": self._effective_brief(workspace),
-            "chat_intake_session": workspace.brief_checkpoint.chat_intake_session,
-            "retrieval_questions": evidence.retrieval_questions,
-            "raw_signals": evidence.raw_signals,
-            "normalized_events": evidence.normalized_events,
-            "event_clusters": evidence.candidate_clusters,
-            "selected_cluster": self._selected_cluster(evidence),
-            "related_situations": situation.related_situations,
-            "calibration_signals": situation.calibration_signals,
-            "situation_snapshot": situation.situation_snapshot,
-            "predictions": situation.predictions,
-            "scenario_tree": situation.scenario_tree,
-            "stage_transition_warnings": situation.stage_transition_warnings,
-            "market_implications": workspace.implications_checkpoint.market_implications,
-            "action_recommendations": workspace.implications_checkpoint.action_recommendations,
-            "exit_signals": workspace.implications_checkpoint.exit_signals,
-            "endangered_symbols": workspace.implications_checkpoint.endangered_symbols,
-            "final_report": report,
-            "operator_workspace_session": workspace,
-            "diagnostics": diagnostics,
-            "provenance": self._workspace_provenance(workspace),
-        }
-
-    def _persist_workspace_run(self, workspace: OperatorWorkspaceSession, report: FinalReport) -> dict:
-        initial_state = {
-            "run_mode": "topic_chat",
-            "window_start": workspace.window_start,
-            "window_end": workspace.window_end,
-            "portfolio_positions": self._effective_brief(workspace).positions
-            if self._effective_brief(workspace)
-            else [],
-            "watchlist": self._effective_brief(workspace).watchlist if self._effective_brief(workspace) else [],
-            "operator_policy_config": workspace.operator_policy_config,
-            "topic_prompt": workspace.brief_checkpoint.topic_prompt,
-            "research_brief": self._effective_brief(workspace),
-            "chat_intake_session": workspace.brief_checkpoint.chat_intake_session,
-            "retrieval_questions": workspace.evidence_checkpoint.retrieval_questions,
-            "raw_signals": workspace.evidence_checkpoint.raw_signals,
-        }
-        final_state = self._workspace_final_state(workspace)
-        final_state["final_report"] = report
-        diagnostics = final_state["diagnostics"]
-        run_id = uuid4().hex[:12]
-        scenario_label = "topic_chat"
+    def _persist_review_run(self, session: NodeReviewSession, final_state: dict[str, Any]) -> dict[str, Any]:
+        run_id = session.session_id
+        scenario_label = session.scenario_id or session.run_mode
         run_dir = ensure_directory(self.output_dir / scenario_label / run_id)
-        write_json(run_dir / "state.json", final_state)
-        write_json(run_dir / "trace.json", [final_state])
-        write_json(run_dir / "report.json", report)
-        write_text(run_dir / "report.md", render_markdown(report))
-        write_json(run_dir / "workspace.json", workspace)
+        serialized_final_state = serialize_model(final_state)
+        trace_payload = {
+            "steps": [step.model_dump(mode="json") for step in session.steps],
+            "snapshots": session.state_snapshots,
+        }
+        write_json(run_dir / "state.json", serialized_final_state)
+        write_json(run_dir / "trace.json", trace_payload)
+        if serialized_final_state.get("final_report") is not None:
+            write_json(run_dir / "report.json", serialized_final_state["final_report"])
+            write_text(run_dir / "report.md", render_markdown(final_state["final_report"]))
         self.store.save_run(
             run_id=run_id,
-            scenario_id=None,
-            run_mode="topic_chat",
-            window_start=self._parse_time(initial_state.get("window_start")),
-            window_end=self._parse_time(initial_state.get("window_end")),
-            publish_decision=diagnostics.get("publish_decision", "monitor_only"),
-            diagnostics=diagnostics,
-            final_state=serialize_model(final_state),
-            trace=serialize_model([final_state]),
+            scenario_id=session.scenario_id,
+            run_mode=session.run_mode,
+            window_start=self._parse_time(session.window_start),
+            window_end=self._parse_time(session.window_end),
+            publish_decision=serialized_final_state.get("diagnostics", {}).get("publish_decision", "monitor_only"),
+            diagnostics=serialized_final_state.get("diagnostics", {}),
+            final_state=serialized_final_state,
+            trace=trace_payload["steps"],
         )
         self.store.save_predictions(run_id=run_id, predictions=final_state.get("predictions", []))
         selected_cluster = final_state.get("selected_cluster")
-        if selected_cluster is not None:
+        report = final_state.get("final_report")
+        if report is not None and selected_cluster is not None:
             self.store.save_report(
                 PublishedReport(
                     report_id=uuid4().hex[:12],
@@ -951,100 +739,45 @@ class StrategicSwarmRunner:
                     cluster_id=selected_cluster.cluster_id
                     if hasattr(selected_cluster, "cluster_id")
                     else selected_cluster["cluster_id"],
-                    publication_status=report.publication_status,
+                    publication_status=report.publication_status
+                    if hasattr(report, "publication_status")
+                    else report["publication_status"],
                     published_at=datetime.now(UTC),
                     report=report,
-                    diagnostics=diagnostics,
+                    diagnostics=serialized_final_state.get("diagnostics", {}),
                 )
             )
         return {
             "run_id": run_id,
             "run_dir": str(run_dir),
-            "final_state": final_state,
+            "final_state": serialized_final_state,
         }
 
-    def _run(self, *, initial_state: dict) -> dict:
-        run_id = uuid4().hex[:12]
-        if "raw_signals" in initial_state:
-            initial_state["raw_signals"] = [
-                signal if isinstance(signal, RawSignal) else RawSignal.model_validate(signal)
-                for signal in initial_state["raw_signals"]
+    def _restore_runtime_state(self, payload: dict[str, Any]) -> dict[str, Any]:
+        restored = dict(payload)
+        if restored.get("topic_prompt") is not None:
+            restored["topic_prompt"] = TopicPrompt.model_validate(restored["topic_prompt"])
+        if restored.get("research_brief") is not None:
+            restored["research_brief"] = ResearchBrief.model_validate(restored["research_brief"])
+        if restored.get("chat_intake_session") is not None:
+            restored["chat_intake_session"] = ChatIntakeSession.model_validate(restored["chat_intake_session"])
+        if restored.get("final_report") is not None:
+            restored["final_report"] = FinalReport.model_validate(restored["final_report"])
+        if restored.get("selected_cluster") is not None:
+            restored["selected_cluster"] = EventCluster.model_validate(restored["selected_cluster"])
+        if restored.get("predictions"):
+            restored["predictions"] = [Prediction.model_validate(item) for item in restored["predictions"]]
+        if restored.get("market_implications"):
+            restored["market_implications"] = [
+                MarketImplication.model_validate(item) for item in restored["market_implications"]
             ]
-        initial_state["portfolio_positions"] = [
-            item if isinstance(item, PortfolioPosition) else PortfolioPosition.model_validate(item)
-            for item in initial_state.get("portfolio_positions", [])
-        ]
-        initial_state["watchlist"] = [
-            item if isinstance(item, WatchlistEntry) else WatchlistEntry.model_validate(item)
-            for item in initial_state.get("watchlist", [])
-        ]
-        if initial_state.get("operator_policy_config") is not None:
-            policy = initial_state["operator_policy_config"]
-            initial_state["operator_policy_config"] = (
-                policy if isinstance(policy, OperatorPolicyConfig) else OperatorPolicyConfig.model_validate(policy)
-            )
-        if initial_state.get("topic_prompt") is not None:
-            prompt = initial_state["topic_prompt"]
-            initial_state["topic_prompt"] = (
-                prompt if isinstance(prompt, TopicPrompt) else TopicPrompt.model_validate(prompt)
-            )
-        if initial_state.get("research_brief") is not None:
-            brief = initial_state["research_brief"]
-            initial_state["research_brief"] = (
-                brief if isinstance(brief, ResearchBrief) else ResearchBrief.model_validate(brief)
-            )
-        if initial_state.get("chat_intake_session") is not None:
-            session = initial_state["chat_intake_session"]
-            initial_state["chat_intake_session"] = (
-                session if isinstance(session, ChatIntakeSession) else ChatIntakeSession.model_validate(session)
-            )
-        initial_state = {
-            **initial_state,
-            "diagnostics": {**initial_state.get("diagnostics", {}), "run_id": run_id},
-        }
-        snapshots = list(self.workflow.stream(initial_state, stream_mode="values"))
-        final_state = snapshots[-1]
-        scenario_label = initial_state.get("scenario_id") or initial_state.get("run_mode", "live")
-        run_dir = ensure_directory(self.output_dir / scenario_label / run_id)
-        write_json(run_dir / "state.json", final_state)
-        write_json(run_dir / "trace.json", snapshots)
-        if final_state.get("final_report") is not None:
-            write_json(run_dir / "report.json", final_state["final_report"])
-            write_text(run_dir / "report.md", render_markdown(final_state["final_report"]))
-        self.store.save_run(
-            run_id=run_id,
-            scenario_id=initial_state.get("scenario_id"),
-            run_mode=initial_state.get("run_mode", "demo"),
-            window_start=self._parse_time(initial_state.get("window_start")),
-            window_end=self._parse_time(initial_state.get("window_end")),
-            publish_decision=final_state.get("diagnostics", {}).get("publish_decision", "monitor_only"),
-            diagnostics=final_state.get("diagnostics", {}),
-            final_state=serialize_model(final_state),
-            trace=serialize_model(snapshots),
-        )
-        self.store.save_predictions(run_id=run_id, predictions=final_state.get("predictions", []))
-        if final_state.get("final_report") is not None and final_state.get("selected_cluster") is not None:
-            self.store.save_report(
-                PublishedReport(
-                    report_id=uuid4().hex[:12],
-                    run_id=run_id,
-                    cluster_id=final_state["selected_cluster"]["cluster_id"]
-                    if isinstance(final_state["selected_cluster"], dict)
-                    else final_state["selected_cluster"].cluster_id,
-                    publication_status=final_state["final_report"]["publication_status"]
-                    if isinstance(final_state["final_report"], dict)
-                    else final_state["final_report"].publication_status,
-                    published_at=datetime.now(UTC),
-                    report=final_state["final_report"],
-                    diagnostics=final_state.get("diagnostics", {}),
-                )
-            )
-        return {
-            "run_id": run_id,
-            "scenario_id": initial_state.get("scenario_id"),
-            "run_dir": str(run_dir),
-            "final_state": final_state,
-        }
+        if restored.get("action_recommendations"):
+            restored["action_recommendations"] = [
+                ActionRecommendation.model_validate(item) for item in restored["action_recommendations"]
+            ]
+        if restored.get("exit_signals"):
+            restored["exit_signals"] = [ActionRecommendation.model_validate(item) for item in restored["exit_signals"]]
+        return restored
 
     def _parse_time(self, value: str | None) -> datetime | None:
         return datetime.fromisoformat(value) if value else None
@@ -1068,10 +801,6 @@ class StrategicSwarmRunner:
             return
         write_json(run_dir / "outcomes.json", {"run_id": run_id, "summary": summary, "outcomes": outcomes})
         write_text(run_dir / "outcomes.md", render_outcome_markdown(run_id=run_id, outcomes=outcomes, summary=summary))
-
-    def _topic_story_key(self, brief: ResearchBrief) -> str:
-        seed = brief.normalized_topic or brief.original_topic
-        return "_".join(token for token in seed.lower().replace("/", " ").split() if token)[:80] or "topic_chat"
 
 
 def default_goldset() -> list[str]:

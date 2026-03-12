@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from faultline.graph.review import current_review_step as graph_current_review_step
+from faultline.graph.review import review_toc_rows as graph_review_toc_rows
 from faultline.graph.runner import StrategicSwarmRunner, default_goldset
 from faultline.utils.io import serialize_model
 
@@ -66,6 +68,15 @@ def workspace_checkpoint_rows(workspace: dict[str, Any]) -> list[dict[str, Any]]
             }
         )
     return rows
+
+
+def review_toc_rows(session: dict[str, Any]) -> list[dict[str, Any]]:
+    return graph_review_toc_rows(session)
+
+
+def current_review_step(session: dict[str, Any]) -> dict[str, Any] | None:
+    step = graph_current_review_step(session)
+    return step.model_dump(mode="json") if step is not None else None
 
 
 def load_outcome_markdown(run_dir: str | Path) -> str | None:

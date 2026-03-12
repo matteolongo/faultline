@@ -405,6 +405,47 @@ class OperatorWorkspaceSession(BaseModel):
     report_checkpoint: ReportCheckpoint = Field(default_factory=ReportCheckpoint)
 
 
+class ReviewStepArtifactRefs(BaseModel):
+    run_dir: str | None = None
+    report_path: str | None = None
+    trace_path: str | None = None
+
+
+class NodeReviewStep(BaseModel):
+    node_id: str
+    title: str
+    status: str = "pending"
+    changed_keys: list[str] = Field(default_factory=list)
+    artifact_summary: str = ""
+    delta_summary: dict[str, str] = Field(default_factory=dict)
+    preview_payload: dict[str, Any] = Field(default_factory=dict)
+    editable_payload: dict[str, Any] = Field(default_factory=dict)
+    artifact_refs: ReviewStepArtifactRefs = Field(default_factory=ReviewStepArtifactRefs)
+    pre_state_index: int = 0
+    post_state_index: int = 0
+
+
+class NodeReviewSession(BaseModel):
+    session_id: str
+    thread_id: str
+    run_mode: str
+    status: str = "paused"
+    scenario_id: str | None = None
+    window_start: str | None = None
+    window_end: str | None = None
+    topic_prompt: TopicPrompt | None = None
+    research_brief: ResearchBrief | None = None
+    chat_intake_session: ChatIntakeSession | None = None
+    current_node_id: str | None = None
+    approved_nodes: list[str] = Field(default_factory=list)
+    steps: list[NodeReviewStep] = Field(default_factory=list)
+    state_snapshots: list[dict[str, Any]] = Field(default_factory=list)
+    selected_run_id: str | None = None
+    selected_run_dir: str | None = None
+    final_state: dict[str, Any] = Field(default_factory=dict)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+
 class OperatorPolicyConfig(BaseModel):
     implication_enter_threshold: float = Field(default=0.68, ge=0.0, le=1.0)
     asymmetric_enter_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
