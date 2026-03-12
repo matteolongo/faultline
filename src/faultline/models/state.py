@@ -6,21 +6,27 @@ from typing_extensions import TypedDict
 
 from faultline.models.contracts import (
     ActionRecommendation,
+    BriefCheckpoint,
     CalibrationSignal,
     ChatIntakeSession,
     EventCluster,
+    EvidenceCheckpoint,
     FinalReport,
+    ImplicationsCheckpoint,
     MarketImplication,
     OperatorPolicyConfig,
+    OperatorWorkspaceSession,
     OutcomeRecord,
     PortfolioPosition,
     Prediction,
     ProviderHealthStatus,
     RawSignal,
     RelatedSituation,
+    ReportCheckpoint,
     ResearchBrief,
     ScenarioPath,
     SignalEvent,
+    SituationCheckpoint,
     SituationSnapshot,
     StageTransitionWarning,
     TopicPrompt,
@@ -40,6 +46,12 @@ class FaultlineInputSchema(TypedDict, total=False):
     research_brief: ResearchBrief
     chat_intake_session: ChatIntakeSession
     retrieval_questions: list[str]
+    operator_workspace_session: OperatorWorkspaceSession
+    brief_checkpoint: BriefCheckpoint
+    evidence_checkpoint: EvidenceCheckpoint
+    situation_checkpoint: SituationCheckpoint
+    implications_checkpoint: ImplicationsCheckpoint
+    report_checkpoint: ReportCheckpoint
 
 
 class FaultlineState(TypedDict, total=False):
@@ -54,6 +66,12 @@ class FaultlineState(TypedDict, total=False):
     research_brief: ResearchBrief
     chat_intake_session: ChatIntakeSession
     retrieval_questions: list[str]
+    operator_workspace_session: OperatorWorkspaceSession
+    brief_checkpoint: BriefCheckpoint
+    evidence_checkpoint: EvidenceCheckpoint
+    situation_checkpoint: SituationCheckpoint
+    implications_checkpoint: ImplicationsCheckpoint
+    report_checkpoint: ReportCheckpoint
     raw_signals: list[RawSignal]
     normalized_events: list[SignalEvent]
     event_clusters: list[EventCluster]

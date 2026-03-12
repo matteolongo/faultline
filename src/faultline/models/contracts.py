@@ -332,6 +332,81 @@ class ChatIntakeSession(BaseModel):
     interpretation: str = ""
 
 
+class BriefCheckpoint(BaseModel):
+    status: str = "not_started"
+    topic_prompt: TopicPrompt | None = None
+    chat_intake_session: ChatIntakeSession | None = None
+    computed_brief: ResearchBrief | None = None
+    approved_brief: ResearchBrief | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[str] = Field(default_factory=list)
+
+
+class EvidenceCheckpoint(BaseModel):
+    status: str = "not_started"
+    retrieval_questions: list[str] = Field(default_factory=list)
+    raw_signals: list[RawSignal] = Field(default_factory=list)
+    normalized_events: list[SignalEvent] = Field(default_factory=list)
+    candidate_clusters: list[EventCluster] = Field(default_factory=list)
+    selected_cluster_id: str | None = None
+    approved_cluster_id: str | None = None
+    excluded_signal_ids: list[str] = Field(default_factory=list)
+    included_signal_ids: list[str] = Field(default_factory=list)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[str] = Field(default_factory=list)
+
+
+class SituationCheckpoint(BaseModel):
+    status: str = "not_started"
+    related_situations: list[RelatedSituation] = Field(default_factory=list)
+    calibration_signals: list[CalibrationSignal] = Field(default_factory=list)
+    situation_snapshot: SituationSnapshot | None = None
+    predictions: list[Prediction] = Field(default_factory=list)
+    scenario_tree: list[ScenarioPath] = Field(default_factory=list)
+    stage_transition_warnings: list[StageTransitionWarning] = Field(default_factory=list)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[str] = Field(default_factory=list)
+
+
+class ImplicationsCheckpoint(BaseModel):
+    status: str = "not_started"
+    market_implications: list[MarketImplication] = Field(default_factory=list)
+    action_recommendations: list[ActionRecommendation] = Field(default_factory=list)
+    exit_signals: list[ActionRecommendation] = Field(default_factory=list)
+    endangered_symbols: list[str] = Field(default_factory=list)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[str] = Field(default_factory=list)
+
+
+class ReportCheckpoint(BaseModel):
+    status: str = "not_started"
+    final_report: FinalReport | None = None
+    report_markdown: str = ""
+    run_id: str | None = None
+    run_dir: str | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[str] = Field(default_factory=list)
+
+
+class OperatorWorkspaceSession(BaseModel):
+    workspace_id: str
+    current_stage: str = "brief"
+    stages: list[str] = Field(
+        default_factory=lambda: ["brief", "evidence", "situation", "implications", "report"]
+    )
+    selected_run_id: str | None = None
+    selected_run_dir: str | None = None
+    rerun_lineage: list[str] = Field(default_factory=list)
+    window_start: str | None = None
+    window_end: str | None = None
+    operator_policy_config: OperatorPolicyConfig | None = None
+    brief_checkpoint: BriefCheckpoint = Field(default_factory=BriefCheckpoint)
+    evidence_checkpoint: EvidenceCheckpoint = Field(default_factory=EvidenceCheckpoint)
+    situation_checkpoint: SituationCheckpoint = Field(default_factory=SituationCheckpoint)
+    implications_checkpoint: ImplicationsCheckpoint = Field(default_factory=ImplicationsCheckpoint)
+    report_checkpoint: ReportCheckpoint = Field(default_factory=ReportCheckpoint)
+
+
 class OperatorPolicyConfig(BaseModel):
     implication_enter_threshold: float = Field(default=0.68, ge=0.0, le=1.0)
     asymmetric_enter_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
