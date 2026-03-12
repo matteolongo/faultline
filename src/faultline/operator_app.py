@@ -119,12 +119,18 @@ def _render_payload(st: Any, payload: dict[str, Any], output_dir: str) -> None:
 
 
 def _render_brief_stage(st: Any, runner: StrategicSwarmRunner, workspace: OperatorWorkspaceSession) -> None:
-    brief = _effective_brief(workspace) or ResearchBrief(original_topic=workspace.brief_checkpoint.topic_prompt.topic if workspace.brief_checkpoint.topic_prompt else "")
+    brief = _effective_brief(workspace) or ResearchBrief(
+        original_topic=workspace.brief_checkpoint.topic_prompt.topic if workspace.brief_checkpoint.topic_prompt else ""
+    )
     prefix = f"{workspace.workspace_id}_brief"
     st.markdown(f"**Status**: `{workspace.brief_checkpoint.status}`")
-    st.markdown(f"**Interpretation**: {workspace.brief_checkpoint.chat_intake_session.interpretation if workspace.brief_checkpoint.chat_intake_session else ''}")
+    st.markdown(
+        f"**Interpretation**: {workspace.brief_checkpoint.chat_intake_session.interpretation if workspace.brief_checkpoint.chat_intake_session else ''}"
+    )
     normalized_topic = st.text_input("Normalized topic", value=brief.normalized_topic, key=f"{prefix}_normalized_topic")
-    system_under_study = st.text_input("System under study", value=brief.system_under_study, key=f"{prefix}_system_under_study")
+    system_under_study = st.text_input(
+        "System under study", value=brief.system_under_study, key=f"{prefix}_system_under_study"
+    )
     analysis_goal = st.text_input("Analysis goal", value=brief.analysis_goal, key=f"{prefix}_analysis_goal")
     geographic_scope = st.text_input("Geographic scope", value=brief.geographic_scope, key=f"{prefix}_geographic_scope")
     time_horizon = st.text_input("Time horizon", value=brief.time_horizon, key=f"{prefix}_time_horizon")
@@ -161,11 +167,15 @@ def _render_brief_stage(st: Any, runner: StrategicSwarmRunner, workspace: Operat
         workspace = _approve_stage(workspace, "brief")
         _store_workspace(st, workspace)
         st.rerun()
-    if columns[2].button("Generate Evidence", key=f"{prefix}_generate", disabled=workspace.brief_checkpoint.status != "approved"):
+    if columns[2].button(
+        "Generate Evidence", key=f"{prefix}_generate", disabled=workspace.brief_checkpoint.status != "approved"
+    ):
         workspace = runner.build_evidence_checkpoint(workspace)
         _store_workspace(st, workspace)
         st.rerun()
-    if columns[3].button("Rerun from Here", key=f"{prefix}_rerun", disabled=workspace.brief_checkpoint.status != "approved"):
+    if columns[3].button(
+        "Rerun from Here", key=f"{prefix}_rerun", disabled=workspace.brief_checkpoint.status != "approved"
+    ):
         workspace = runner.rerun_from_checkpoint(workspace, "brief")
         _store_workspace(st, workspace)
         st.rerun()
@@ -200,11 +210,17 @@ def _render_evidence_stage(st: Any, runner: StrategicSwarmRunner, workspace: Ope
         format_func=lambda item: signal_options[item],
         key=f"{prefix}_excluded",
     )
-    cluster_options = {item.cluster_id: f"{item.cluster_id} | {item.canonical_title}" for item in checkpoint.candidate_clusters}
+    cluster_options = {
+        item.cluster_id: f"{item.cluster_id} | {item.canonical_title}" for item in checkpoint.candidate_clusters
+    }
     selected_cluster_id = st.selectbox(
         "Primary cluster",
         options=list(cluster_options.keys()) or [""],
-        index=(list(cluster_options.keys()).index(checkpoint.selected_cluster_id) if checkpoint.selected_cluster_id in cluster_options else 0),
+        index=(
+            list(cluster_options.keys()).index(checkpoint.selected_cluster_id)
+            if checkpoint.selected_cluster_id in cluster_options
+            else 0
+        ),
         format_func=lambda item: cluster_options.get(item, "No clusters yet"),
         key=f"{prefix}_cluster",
     )
@@ -232,11 +248,15 @@ def _render_evidence_stage(st: Any, runner: StrategicSwarmRunner, workspace: Ope
         workspace = _approve_stage(workspace, "evidence")
         _store_workspace(st, workspace)
         st.rerun()
-    if cols[3].button("Generate Situation", key=f"{prefix}_next", disabled=workspace.evidence_checkpoint.status != "approved"):
+    if cols[3].button(
+        "Generate Situation", key=f"{prefix}_next", disabled=workspace.evidence_checkpoint.status != "approved"
+    ):
         workspace = runner.build_situation_checkpoint(workspace)
         _store_workspace(st, workspace)
         st.rerun()
-    if cols[4].button("Rerun from Here", key=f"{prefix}_rerun", disabled=workspace.evidence_checkpoint.status != "approved"):
+    if cols[4].button(
+        "Rerun from Here", key=f"{prefix}_rerun", disabled=workspace.evidence_checkpoint.status != "approved"
+    ):
         workspace = runner.rerun_from_checkpoint(workspace, "evidence")
         _store_workspace(st, workspace)
         st.rerun()
@@ -282,14 +302,18 @@ def _render_situation_stage(st: Any, runner: StrategicSwarmRunner, workspace: Op
     st.markdown(f"**Status**: `{checkpoint.status}`")
     snapshot = checkpoint.situation_snapshot
     title = st.text_input("Situation title", value=snapshot.title if snapshot else "", key=f"{prefix}_title")
-    summary = st.text_area("Situation summary", value=snapshot.summary if snapshot else "", height=120, key=f"{prefix}_summary")
+    summary = st.text_area(
+        "Situation summary", value=snapshot.summary if snapshot else "", height=120, key=f"{prefix}_summary"
+    )
     system_under_pressure = st.text_input(
         "System under pressure",
         value=snapshot.system_under_pressure if snapshot else "",
         key=f"{prefix}_system",
     )
     cols = st.columns(5)
-    if cols[0].button("Generate Situation", key=f"{prefix}_generate", disabled=workspace.evidence_checkpoint.status != "approved"):
+    if cols[0].button(
+        "Generate Situation", key=f"{prefix}_generate", disabled=workspace.evidence_checkpoint.status != "approved"
+    ):
         workspace = runner.build_situation_checkpoint(workspace)
         _store_workspace(st, workspace)
         st.rerun()
@@ -306,7 +330,9 @@ def _render_situation_stage(st: Any, runner: StrategicSwarmRunner, workspace: Op
         workspace = _approve_stage(workspace, "situation")
         _store_workspace(st, workspace)
         st.rerun()
-    if cols[3].button("Generate Implications", key=f"{prefix}_next", disabled=workspace.situation_checkpoint.status != "approved"):
+    if cols[3].button(
+        "Generate Implications", key=f"{prefix}_next", disabled=workspace.situation_checkpoint.status != "approved"
+    ):
         workspace = runner.build_implications_checkpoint(workspace)
         _store_workspace(st, workspace)
         st.rerun()
@@ -341,7 +367,9 @@ def _render_implications_stage(st: Any, runner: StrategicSwarmRunner, workspace:
     edited_implications = st.data_editor(implication_rows, num_rows="dynamic", key=f"{prefix}_implications")
     edited_actions = st.data_editor(action_rows, num_rows="dynamic", key=f"{prefix}_actions")
     cols = st.columns(5)
-    if cols[0].button("Generate Implications", key=f"{prefix}_generate", disabled=workspace.situation_checkpoint.status != "approved"):
+    if cols[0].button(
+        "Generate Implications", key=f"{prefix}_generate", disabled=workspace.situation_checkpoint.status != "approved"
+    ):
         workspace = runner.build_implications_checkpoint(workspace)
         _store_workspace(st, workspace)
         st.rerun()
@@ -353,7 +381,9 @@ def _render_implications_stage(st: Any, runner: StrategicSwarmRunner, workspace:
         workspace = _approve_stage(workspace, "implications")
         _store_workspace(st, workspace)
         st.rerun()
-    if cols[3].button("Generate Report", key=f"{prefix}_next", disabled=workspace.implications_checkpoint.status != "approved"):
+    if cols[3].button(
+        "Generate Report", key=f"{prefix}_next", disabled=workspace.implications_checkpoint.status != "approved"
+    ):
         workspace = runner.build_report_checkpoint(workspace)
         _store_workspace(st, workspace)
         st.rerun()
@@ -378,7 +408,9 @@ def _render_report_stage(st: Any, runner: StrategicSwarmRunner, workspace: Opera
         key=f"{prefix}_summary",
     )
     cols = st.columns(4)
-    if cols[0].button("Generate Report", key=f"{prefix}_generate", disabled=workspace.implications_checkpoint.status != "approved"):
+    if cols[0].button(
+        "Generate Report", key=f"{prefix}_generate", disabled=workspace.implications_checkpoint.status != "approved"
+    ):
         workspace = runner.build_report_checkpoint(workspace)
         _store_workspace(st, workspace)
         st.rerun()
@@ -390,7 +422,9 @@ def _render_report_stage(st: Any, runner: StrategicSwarmRunner, workspace: Opera
         workspace = _approve_stage(workspace, "report")
         _store_workspace(st, workspace)
         st.rerun()
-    if cols[3].button("Rerun from Here", key=f"{prefix}_rerun", disabled=workspace.implications_checkpoint.status == "not_started"):
+    if cols[3].button(
+        "Rerun from Here", key=f"{prefix}_rerun", disabled=workspace.implications_checkpoint.status == "not_started"
+    ):
         workspace = runner.rerun_from_checkpoint(workspace, "report")
         _store_workspace(st, workspace)
         st.rerun()
@@ -401,7 +435,9 @@ def _render_report_stage(st: Any, runner: StrategicSwarmRunner, workspace: Opera
         st.markdown(checkpoint.report_markdown)
 
 
-def _render_workspace(st: Any, runner: StrategicSwarmRunner, workspace: OperatorWorkspaceSession, output_dir: str) -> None:
+def _render_workspace(
+    st: Any, runner: StrategicSwarmRunner, workspace: OperatorWorkspaceSession, output_dir: str
+) -> None:
     left, right = st.columns([1, 3])
     with left:
         st.subheader("Stepper")
@@ -468,8 +504,12 @@ def main() -> None:
     if mode == "topic_chat":
         topic = st.sidebar.text_area("Topic or thesis", value=st.session_state.get("topic_chat_topic", ""), height=100)
         thesis = st.sidebar.text_input("Optional thesis", value=st.session_state.get("topic_chat_thesis", ""))
-        positions_raw = st.sidebar.text_input("Positions (optional)", value=st.session_state.get("topic_chat_positions", ""))
-        watchlist_raw = st.sidebar.text_input("Watchlist (optional)", value=st.session_state.get("topic_chat_watchlist", ""))
+        positions_raw = st.sidebar.text_input(
+            "Positions (optional)", value=st.session_state.get("topic_chat_positions", "")
+        )
+        watchlist_raw = st.sidebar.text_input(
+            "Watchlist (optional)", value=st.session_state.get("topic_chat_watchlist", "")
+        )
         st.session_state["topic_chat_topic"] = topic
         st.session_state["topic_chat_thesis"] = thesis
         st.session_state["topic_chat_positions"] = positions_raw

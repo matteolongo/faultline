@@ -369,7 +369,9 @@ class StrategicSwarmRunner:
             raise ValueError("Evidence checkpoint must select a cluster before situation generation.")
         calibration_signals = self.store.load_calibration_signals()
         related_situations = self.workflow_engine.memory.search(cluster, exclude_id=cluster.cluster_id)
-        cluster_events = [item for item in session.evidence_checkpoint.normalized_events if item.cluster_id == cluster.cluster_id]
+        cluster_events = [
+            item for item in session.evidence_checkpoint.normalized_events if item.cluster_id == cluster.cluster_id
+        ]
         snapshot = self.workflow_engine.mapper.map(cluster, cluster_events, related_situations)
         predictions, scenario_tree, warnings = self.workflow_engine.prediction_engine.predict(
             snapshot,
@@ -715,7 +717,11 @@ class StrategicSwarmRunner:
         return [item.model_dump(mode="json") for item in self.store.provider_health(providers)]
 
     def _coerce_workspace(self, workspace: OperatorWorkspaceSession | dict) -> OperatorWorkspaceSession:
-        return workspace if isinstance(workspace, OperatorWorkspaceSession) else OperatorWorkspaceSession.model_validate(workspace)
+        return (
+            workspace
+            if isinstance(workspace, OperatorWorkspaceSession)
+            else OperatorWorkspaceSession.model_validate(workspace)
+        )
 
     def _effective_brief(self, workspace: OperatorWorkspaceSession) -> ResearchBrief | None:
         return workspace.brief_checkpoint.approved_brief or workspace.brief_checkpoint.computed_brief
@@ -734,9 +740,7 @@ class StrategicSwarmRunner:
             or default_start
         )
         resolved_end = (
-            end_at
-            or (datetime.fromisoformat(workspace.window_end) if workspace.window_end else None)
-            or default_end
+            end_at or (datetime.fromisoformat(workspace.window_end) if workspace.window_end else None) or default_end
         )
         workspace.window_start = resolved_start.isoformat()
         workspace.window_end = resolved_end.isoformat()
@@ -757,7 +761,9 @@ class StrategicSwarmRunner:
         for question in retrieval_questions:
             try:
                 fetched = self.web_search_provider.query(question, story_key=story_key, fetched_at=end_at)
-                normalized = [item if isinstance(item, RawSignal) else RawSignal.model_validate(item) for item in fetched]
+                normalized = [
+                    item if isinstance(item, RawSignal) else RawSignal.model_validate(item) for item in fetched
+                ]
                 raw_signals.extend(normalized)
                 synthesis_count += len(normalized)
             except ProviderError as exc:
@@ -776,7 +782,9 @@ class StrategicSwarmRunner:
                 continue
             try:
                 fetched = provider.fetch_window(start_at, end_at)
-                normalized = [item if isinstance(item, RawSignal) else RawSignal.model_validate(item) for item in fetched]
+                normalized = [
+                    item if isinstance(item, RawSignal) else RawSignal.model_validate(item) for item in fetched
+                ]
                 raw_signals.extend(normalized)
                 provider_counts[provider.provider_name] = len(normalized)
             except ProviderError as exc:
@@ -809,7 +817,11 @@ class StrategicSwarmRunner:
 
     def _workspace_provenance(self, workspace: OperatorWorkspaceSession) -> list[str]:
         brief = self._effective_brief(workspace)
-        topic = workspace.brief_checkpoint.topic_prompt.topic if workspace.brief_checkpoint.topic_prompt else "unknown topic"
+        topic = (
+            workspace.brief_checkpoint.topic_prompt.topic
+            if workspace.brief_checkpoint.topic_prompt
+            else "unknown topic"
+        )
         lines = [
             f"Topic chat started from '{topic}'.",
             f"Workspace stage: {workspace.current_stage}.",
@@ -831,12 +843,16 @@ class StrategicSwarmRunner:
         diagnostics = {
             "publish_decision": report.publication_status if report is not None else "monitor_only",
             "stage": situation.situation_snapshot.stage.stage if situation.situation_snapshot is not None else None,
-            "topic_prompt": workspace.brief_checkpoint.topic_prompt.topic if workspace.brief_checkpoint.topic_prompt else "",
+            "topic_prompt": workspace.brief_checkpoint.topic_prompt.topic
+            if workspace.brief_checkpoint.topic_prompt
+            else "",
             "deep_dive_objective": self.topic_chat_intake.describe_brief(self._effective_brief(workspace))
             if self._effective_brief(workspace)
             else "",
             "retrieval_questions": evidence.retrieval_questions,
-            "intake_assumptions": self._effective_brief(workspace).assumptions if self._effective_brief(workspace) else [],
+            "intake_assumptions": self._effective_brief(workspace).assumptions
+            if self._effective_brief(workspace)
+            else [],
             "topic_chat_turn_count": len(workspace.brief_checkpoint.chat_intake_session.turns)
             if workspace.brief_checkpoint.chat_intake_session
             else 0,
@@ -892,7 +908,9 @@ class StrategicSwarmRunner:
             "run_mode": "topic_chat",
             "window_start": workspace.window_start,
             "window_end": workspace.window_end,
-            "portfolio_positions": self._effective_brief(workspace).positions if self._effective_brief(workspace) else [],
+            "portfolio_positions": self._effective_brief(workspace).positions
+            if self._effective_brief(workspace)
+            else [],
             "watchlist": self._effective_brief(workspace).watchlist if self._effective_brief(workspace) else [],
             "operator_policy_config": workspace.operator_policy_config,
             "topic_prompt": workspace.brief_checkpoint.topic_prompt,
@@ -930,7 +948,9 @@ class StrategicSwarmRunner:
                 PublishedReport(
                     report_id=uuid4().hex[:12],
                     run_id=run_id,
-                    cluster_id=selected_cluster.cluster_id if hasattr(selected_cluster, "cluster_id") else selected_cluster["cluster_id"],
+                    cluster_id=selected_cluster.cluster_id
+                    if hasattr(selected_cluster, "cluster_id")
+                    else selected_cluster["cluster_id"],
                     publication_status=report.publication_status,
                     published_at=datetime.now(UTC),
                     report=report,

@@ -391,9 +391,7 @@ class ReportCheckpoint(BaseModel):
 class OperatorWorkspaceSession(BaseModel):
     workspace_id: str
     current_stage: str = "brief"
-    stages: list[str] = Field(
-        default_factory=lambda: ["brief", "evidence", "situation", "implications", "report"]
-    )
+    stages: list[str] = Field(default_factory=lambda: ["brief", "evidence", "situation", "implications", "report"])
     selected_run_id: str | None = None
     selected_run_dir: str | None = None
     rerun_lineage: list[str] = Field(default_factory=list)
