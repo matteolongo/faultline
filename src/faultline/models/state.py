@@ -39,8 +39,6 @@ class FaultlineInputSchema(TypedDict, total=False):
     run_mode: str
     window_start: str
     window_end: str
-<<<<<<< copilot/sub-pr-26
-=======
     portfolio_positions: list[PortfolioPosition]
     watchlist: list[WatchlistEntry]
     operator_policy_config: OperatorPolicyConfig
@@ -54,7 +52,6 @@ class FaultlineInputSchema(TypedDict, total=False):
     situation_checkpoint: SituationCheckpoint
     implications_checkpoint: ImplicationsCheckpoint
     report_checkpoint: ReportCheckpoint
->>>>>>> codex/topic-chat-intake
 
 
 class FaultlineState(TypedDict, total=False):
