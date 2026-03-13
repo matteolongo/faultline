@@ -292,6 +292,160 @@ class WatchlistEntry(BaseModel):
     notes: str | None = None
 
 
+class TopicPrompt(BaseModel):
+    topic: str
+    thesis: str | None = None
+
+
+class ResearchBrief(BaseModel):
+    original_topic: str
+    normalized_topic: str = ""
+    system_under_study: str = ""
+    analysis_goal: str = ""
+    geographic_scope: str = ""
+    time_horizon: str = ""
+    target_universe: str = ""
+    portfolio_focus: str = "broader_market"
+    positions: list[PortfolioPosition] = Field(default_factory=list)
+    watchlist: list[WatchlistEntry] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list)
+
+
+class ChatIntakeTurn(BaseModel):
+    question_id: str
+    system_question: str
+    user_answer: str = ""
+    field_updated: str
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    reason: str = ""
+
+
+class ChatIntakeSession(BaseModel):
+    topic_prompt: TopicPrompt
+    brief: ResearchBrief
+    turns: list[ChatIntakeTurn] = Field(default_factory=list)
+    status: str = "exploring"
+    current_question_id: str | None = None
+    current_question: str | None = None
+    current_field: str | None = None
+    interpretation: str = ""
+
+
+class BriefCheckpoint(BaseModel):
+    status: str = "not_started"
+    topic_prompt: TopicPrompt | None = None
+    chat_intake_session: ChatIntakeSession | None = None
+    computed_brief: ResearchBrief | None = None
+    approved_brief: ResearchBrief | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[str] = Field(default_factory=list)
+
+
+class EvidenceCheckpoint(BaseModel):
+    status: str = "not_started"
+    retrieval_questions: list[str] = Field(default_factory=list)
+    raw_signals: list[RawSignal] = Field(default_factory=list)
+    normalized_events: list[SignalEvent] = Field(default_factory=list)
+    candidate_clusters: list[EventCluster] = Field(default_factory=list)
+    selected_cluster_id: str | None = None
+    approved_cluster_id: str | None = None
+    excluded_signal_ids: list[str] = Field(default_factory=list)
+    included_signal_ids: list[str] = Field(default_factory=list)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[str] = Field(default_factory=list)
+
+
+class SituationCheckpoint(BaseModel):
+    status: str = "not_started"
+    related_situations: list[RelatedSituation] = Field(default_factory=list)
+    calibration_signals: list[CalibrationSignal] = Field(default_factory=list)
+    situation_snapshot: SituationSnapshot | None = None
+    predictions: list[Prediction] = Field(default_factory=list)
+    scenario_tree: list[ScenarioPath] = Field(default_factory=list)
+    stage_transition_warnings: list[StageTransitionWarning] = Field(default_factory=list)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[str] = Field(default_factory=list)
+
+
+class ImplicationsCheckpoint(BaseModel):
+    status: str = "not_started"
+    market_implications: list[MarketImplication] = Field(default_factory=list)
+    action_recommendations: list[ActionRecommendation] = Field(default_factory=list)
+    exit_signals: list[ActionRecommendation] = Field(default_factory=list)
+    endangered_symbols: list[str] = Field(default_factory=list)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[str] = Field(default_factory=list)
+
+
+class ReportCheckpoint(BaseModel):
+    status: str = "not_started"
+    final_report: FinalReport | None = None
+    report_markdown: str = ""
+    run_id: str | None = None
+    run_dir: str | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[str] = Field(default_factory=list)
+
+
+class OperatorWorkspaceSession(BaseModel):
+    workspace_id: str
+    current_stage: str = "brief"
+    stages: list[str] = Field(default_factory=lambda: ["brief", "evidence", "situation", "implications", "report"])
+    selected_run_id: str | None = None
+    selected_run_dir: str | None = None
+    rerun_lineage: list[str] = Field(default_factory=list)
+    window_start: str | None = None
+    window_end: str | None = None
+    operator_policy_config: OperatorPolicyConfig | None = None
+    brief_checkpoint: BriefCheckpoint = Field(default_factory=BriefCheckpoint)
+    evidence_checkpoint: EvidenceCheckpoint = Field(default_factory=EvidenceCheckpoint)
+    situation_checkpoint: SituationCheckpoint = Field(default_factory=SituationCheckpoint)
+    implications_checkpoint: ImplicationsCheckpoint = Field(default_factory=ImplicationsCheckpoint)
+    report_checkpoint: ReportCheckpoint = Field(default_factory=ReportCheckpoint)
+
+
+class ReviewStepArtifactRefs(BaseModel):
+    run_dir: str | None = None
+    report_path: str | None = None
+    trace_path: str | None = None
+
+
+class NodeReviewStep(BaseModel):
+    node_id: str
+    title: str
+    status: str = "pending"
+    changed_keys: list[str] = Field(default_factory=list)
+    artifact_summary: str = ""
+    delta_summary: dict[str, str] = Field(default_factory=dict)
+    preview_payload: dict[str, Any] = Field(default_factory=dict)
+    editable_payload: dict[str, Any] = Field(default_factory=dict)
+    artifact_refs: ReviewStepArtifactRefs = Field(default_factory=ReviewStepArtifactRefs)
+    pre_state_index: int = 0
+    post_state_index: int = 0
+
+
+class NodeReviewSession(BaseModel):
+    session_id: str
+    thread_id: str
+    run_mode: str
+    status: str = "paused"
+    scenario_id: str | None = None
+    window_start: str | None = None
+    window_end: str | None = None
+    topic_prompt: TopicPrompt | None = None
+    research_brief: ResearchBrief | None = None
+    chat_intake_session: ChatIntakeSession | None = None
+    current_node_id: str | None = None
+    approved_nodes: list[str] = Field(default_factory=list)
+    steps: list[NodeReviewStep] = Field(default_factory=list)
+    state_snapshots: list[dict[str, Any]] = Field(default_factory=list)
+    selected_run_id: str | None = None
+    selected_run_dir: str | None = None
+    final_state: dict[str, Any] = Field(default_factory=dict)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+
 class OperatorPolicyConfig(BaseModel):
     implication_enter_threshold: float = Field(default=0.68, ge=0.0, le=1.0)
     asymmetric_enter_threshold: float = Field(default=0.72, ge=0.0, le=1.0)
@@ -479,6 +633,10 @@ class FinalReport(BaseModel):
     calibration_notes: list[str] = Field(default_factory=list)
     provenance: list[str] = Field(default_factory=list)
     monitor_only_reason: str | None = None
+    topic_prompt: str = ""
+    deep_dive_objective: str = ""
+    intake_assumptions: list[str] = Field(default_factory=list)
+    retrieval_questions: list[str] = Field(default_factory=list)
     detected_scenario: ScenarioDetection | None = None
     equity_opportunities: list[EquityOpportunity] = Field(default_factory=list)
 
