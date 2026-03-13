@@ -196,7 +196,8 @@ class TopicChatIntake:
         session.current_question_id = follow_up.question_id if follow_up else None
         session.current_question = follow_up.prompt if follow_up else None
         session.current_field = follow_up.field_name if follow_up else None
-        session.interpretation = self.describe_brief(session.brief)
+        if not session.interpretation:
+            session.interpretation = self.describe_brief(session.brief)
         return session
 
     def _heuristic_brief(self, prompt: TopicPrompt) -> ResearchBrief:
