@@ -149,9 +149,8 @@ class StrategicSwarmWorkflow:
                     provider_counts[provider.provider_name] = 0
             return {
                 "raw_signals": raw,
-                "provenance": [
-                    f"Ingested {len(raw)} raw signals for topic chat across {len(questions)} retrieval questions."
-                ],
+                "provenance": state.get("provenance", [])
+                + [f"Ingested {len(raw)} raw signals for topic chat across {len(questions)} retrieval questions."],
                 "diagnostics": {**state.get("diagnostics", {}), "source_counts": provider_counts},
             }
 
@@ -361,7 +360,7 @@ class StrategicSwarmWorkflow:
                 if not isinstance(research_brief, ResearchBrief):
                     research_brief = ResearchBrief.model_validate(research_brief)
                 report.intake_assumptions = research_brief.assumptions
-                report.deep_dive_objective = self.report_builder._deep_dive_objective(research_brief)
+                report.deep_dive_objective = self.report_builder.deep_dive_objective(research_brief)
             report.retrieval_questions = state.get("retrieval_questions", [])
             return {
                 "final_report": report,

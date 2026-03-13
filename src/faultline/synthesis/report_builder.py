@@ -152,7 +152,7 @@ class ReportBuilder:
             provenance=provenance,
             monitor_only_reason=monitor_reason,
             topic_prompt=prompt.topic if prompt is not None else "",
-            deep_dive_objective=self._deep_dive_objective(brief),
+            deep_dive_objective=self.deep_dive_objective(brief),
             intake_assumptions=brief.assumptions if brief is not None else [],
             retrieval_questions=retrieval_questions,
         )
@@ -238,7 +238,7 @@ class ReportBuilder:
             provenance=provenance,
         )
 
-    def _deep_dive_objective(self, brief: ResearchBrief | None) -> str:
+    def deep_dive_objective(self, brief: ResearchBrief | None) -> str:
         if brief is None:
             return ""
         return " | ".join(
