@@ -1,51 +1,50 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
-try:
-    from langgraph.graph import END, START, StateGraph
-except Exception:  # pragma: no cover
-    END = "__end__"
-    START = "__start__"
-
-    class _CompiledGraph:
-        def __init__(self, nodes: dict, edges: dict) -> None:
-            self.nodes = nodes
-            self.edges = edges
-
-        def stream(self, initial_state: dict, stream_mode: str = "values"):
-            state = dict(initial_state)
-            current = self.edges[START]
-            while current != END:
-                update = self.nodes[current](state) or {}
-                state = {**state, **update}
-                yield state.copy()
-                current = self.edges[current]
-
-    class StateGraph:  # type: ignore[override]
-        def __init__(self, _state_schema, **kwargs) -> None:
-            self.nodes: dict[str, object] = {}
-            self.edges: dict[str, str] = {}
-
-        def add_node(self, name: str, fn) -> None:
-            self.nodes[name] = fn
-
-        def add_edge(self, source: str, target: str) -> None:
-            self.edges[source] = target
-
-        def compile(self) -> _CompiledGraph:
-            return _CompiledGraph(self.nodes, self.edges)
-
+from langgraph.graph import END, START, StateGraph
 
 from faultline.analysis import ActionEngine, MarketMapper, PredictionEngine, SituationMapper
 from faultline.memory import SituationMemory
-from faultline.models import FaultlineState
+from faultline.models import (
+    ActionRecommendation,
+    CalibrationSignal,
+    EventCluster,
+    FaultlineState,
+    MarketImplication,
+    PortfolioPosition,
+    Prediction,
+    RawSignal,
+    RelatedSituation,
+    ResearchBrief,
+    ScenarioPath,
+    SignalEvent,
+    SituationSnapshot,
+    StageTransitionWarning,
+    TopicPrompt,
+    WatchlistEntry,
+)
 from faultline.persistence.store import SignalStore, make_dead_letter
 from faultline.providers.base import ProviderError, SignalProvider
+from faultline.providers.live import WebSearchEnricher
 from faultline.providers.normalizer import SignalNormalizer
 from faultline.providers.registry import build_live_providers
 from faultline.providers.sample import DarkSignalProvider, MarketContextProvider, NewsSignalProvider
 from faultline.synthesis.report_builder import ReportBuilder
+
+WORKFLOW_NODE_ORDER = (
+    "ingest_signals",
+    "normalize_events",
+    "retrieve_related_situations",
+    "retrieve_calibration",
+    "map_situation",
+    "generate_predictions",
+    "map_market_implications",
+    "generate_actions",
+    "synthesize_report",
+    "remember_situation",
+)
 
 
 class StrategicSwarmWorkflow:
@@ -54,12 +53,14 @@ class StrategicSwarmWorkflow:
         *,
         store: SignalStore,
         live_providers: list[SignalProvider] | None = None,
+        web_search_provider: WebSearchEnricher | None = None,
     ) -> None:
         self.store = store
         self.news = NewsSignalProvider()
         self.market = MarketContextProvider()
         self.dark = DarkSignalProvider()
         self.live_providers = live_providers or build_live_providers()
+        self.web_search_provider = web_search_provider or WebSearchEnricher()
         self.normalizer = SignalNormalizer()
         self.memory = SituationMemory()
         self.memory.bootstrap(self.store.load_situation_snapshots())
@@ -69,35 +70,25 @@ class StrategicSwarmWorkflow:
         self.action_engine = ActionEngine()
         self.report_builder = ReportBuilder()
 
-    def build(self, *, _input_schema=None):
+    def build(self, *, _input_schema=None, checkpointer=None, interrupt_after=None):
         graph = StateGraph(FaultlineState, input_schema=_input_schema) if _input_schema else StateGraph(FaultlineState)
-        graph.add_node("ingest_signals", self.ingest_signals)
-        graph.add_node("normalize_events", self.normalize_events)
-        graph.add_node("retrieve_related_situations", self.retrieve_related_situations)
-        graph.add_node("retrieve_calibration", self.retrieve_calibration)
-        graph.add_node("map_situation", self.map_situation)
-        graph.add_node("generate_predictions", self.generate_predictions)
-        graph.add_node("map_market_implications", self.map_market_implications)
-        graph.add_node("generate_actions", self.generate_actions)
-        graph.add_node("synthesize_report", self.synthesize_report)
-        graph.add_node("remember_situation", self.remember_situation)
+        for node_id in WORKFLOW_NODE_ORDER:
+            graph.add_node(node_id, getattr(self, node_id))
 
-        graph.add_edge(START, "ingest_signals")
-        graph.add_edge("ingest_signals", "normalize_events")
-        graph.add_edge("normalize_events", "retrieve_related_situations")
-        graph.add_edge("retrieve_related_situations", "retrieve_calibration")
-        graph.add_edge("retrieve_calibration", "map_situation")
-        graph.add_edge("map_situation", "generate_predictions")
-        graph.add_edge("generate_predictions", "map_market_implications")
-        graph.add_edge("map_market_implications", "generate_actions")
-        graph.add_edge("generate_actions", "synthesize_report")
-        graph.add_edge("synthesize_report", "remember_situation")
-        graph.add_edge("remember_situation", END)
-        return graph.compile()
+        graph.add_edge(START, WORKFLOW_NODE_ORDER[0])
+        for source, target in zip(WORKFLOW_NODE_ORDER[:-1], WORKFLOW_NODE_ORDER[1:], strict=True):
+            graph.add_edge(source, target)
+        graph.add_edge(WORKFLOW_NODE_ORDER[-1], END)
+        return graph.compile(checkpointer=checkpointer, interrupt_after=interrupt_after)
 
     def ingest_signals(self, state: FaultlineState) -> FaultlineState:
-        if state.get("raw_signals"):
-            return {"provenance": [f"Loaded {len(state['raw_signals'])} raw signals into the workflow."]}
+        if "raw_signals" in state:
+            return {
+                "provenance": [
+                    *state.get("provenance", []),
+                    f"Loaded {len(state['raw_signals'])} raw signals into the workflow.",
+                ]
+            }
 
         if state.get("run_mode") == "demo":
             scenario_id = state.get("scenario_id") or "open_model_breakout"
@@ -108,16 +99,70 @@ class StrategicSwarmWorkflow:
                 "diagnostics": {**state.get("diagnostics", {}), "source_counts": {"sample": len(raw)}},
             }
 
-        now = datetime.now(UTC)
-        start_at = (
-            datetime.fromisoformat(state["window_start"]) if state.get("window_start") else now - timedelta(minutes=60)
-        )
-        end_at = datetime.fromisoformat(state["window_end"]) if state.get("window_end") else now
+        if state.get("run_mode") == "topic_chat":
+            start_at, end_at = self._resolve_window(state, lookback_minutes=60 * 24 * 7)
+            brief = self._coerce_brief(state.get("research_brief"))
+            story_key = self._topic_story_key(brief)
+            questions = state.get("retrieval_questions", [])
+            raw = []
+            provider_counts: dict[str, int] = {}
+            synthesis_count = 0
+            for question in questions:
+                try:
+                    fetched = [
+                        item if isinstance(item, RawSignal) else RawSignal.model_validate(item)
+                        for item in self.web_search_provider.query(question, story_key=story_key, fetched_at=end_at)
+                    ]
+                    synthesis_count += len(fetched)
+                    raw.extend(fetched)
+                except ProviderError as exc:
+                    self.store.save_dead_letter(
+                        make_dead_letter(
+                            provider_name=self.web_search_provider.provider_name,
+                            window_start=start_at,
+                            window_end=end_at,
+                            error_type="provider_error",
+                            error_message=str(exc),
+                        )
+                    )
+            provider_counts[self.web_search_provider.provider_name] = synthesis_count
+            for provider in self.live_providers:
+                if getattr(provider, "source_family", "") not in {"market", "macro"}:
+                    continue
+                try:
+                    fetched = [
+                        item if isinstance(item, RawSignal) else RawSignal.model_validate(item)
+                        for item in provider.fetch_window(start_at, end_at)
+                    ]
+                    provider_counts[provider.provider_name] = len(fetched)
+                    raw.extend(fetched)
+                except ProviderError as exc:
+                    self.store.save_dead_letter(
+                        make_dead_letter(
+                            provider_name=provider.provider_name,
+                            window_start=start_at,
+                            window_end=end_at,
+                            error_type="provider_error",
+                            error_message=str(exc),
+                        )
+                    )
+                    provider_counts[provider.provider_name] = 0
+            return {
+                "raw_signals": raw,
+                "provenance": state.get("provenance", [])
+                + [f"Ingested {len(raw)} raw signals for topic chat across {len(questions)} retrieval questions."],
+                "diagnostics": {**state.get("diagnostics", {}), "source_counts": provider_counts},
+            }
+
+        start_at, end_at = self._resolve_window(state)
         raw = []
         provider_counts: dict[str, int] = {}
         for provider in self.live_providers:
             try:
-                fetched = provider.fetch_window(start_at, end_at)
+                fetched = [
+                    item if isinstance(item, RawSignal) else RawSignal.model_validate(item)
+                    for item in provider.fetch_window(start_at, end_at)
+                ]
                 provider_counts[provider.provider_name] = len(fetched)
                 raw.extend(fetched)
             except ProviderError as exc:
@@ -137,28 +182,41 @@ class StrategicSwarmWorkflow:
         }
 
     def normalize_events(self, state: FaultlineState) -> FaultlineState:
-        story_keys = [self.normalizer._story_key(signal) for signal in state["raw_signals"]]
-        dedupe_hashes = [signal.dedupe_hash or signal.id for signal in state["raw_signals"]]
+        manual_excluded_ids = set(state.get("excluded_signal_ids", []))
+        raw_signals = self._coerce_list(state["raw_signals"], RawSignal)
+        source_signals = [signal for signal in raw_signals if signal.id not in manual_excluded_ids]
+        story_keys = [self.normalizer._story_key(signal) for signal in source_signals]
+        dedupe_hashes = [signal.dedupe_hash or signal.id for signal in source_signals]
         known_hashes = (
             self.store.get_seen_dedupe_hashes(dedupe_hashes)
-            if state.get("run_mode") not in {"demo", "replay"}
+            if state.get("run_mode") not in {"demo", "replay", "topic_chat"}
             else set()
         )
         prior_story_counts = self.store.get_story_counts(story_keys) if state.get("run_mode") != "demo" else {}
         events, clusters, diagnostics = self.normalizer.normalize(
-            state["raw_signals"],
+            source_signals,
             known_dedupe_hashes=known_hashes,
             prior_story_counts=prior_story_counts,
         )
         if state.get("run_mode") != "demo":
-            self.store.save_raw_signals(state["raw_signals"])
+            self.store.save_raw_signals(source_signals)
             self.store.save_normalized_events(events)
             self.store.save_event_clusters(clusters)
+
+        included_signal_ids = [item.id for item in events]
+        excluded_signal_ids = sorted(
+            {
+                *manual_excluded_ids,
+                *(signal.id for signal in raw_signals if signal.id not in included_signal_ids),
+            }
+        )
         selected_cluster = clusters[0] if clusters else None
         return {
             "normalized_events": events,
             "event_clusters": clusters,
             "selected_cluster": selected_cluster,
+            "included_signal_ids": included_signal_ids,
+            "excluded_signal_ids": excluded_signal_ids,
             "diagnostics": {**state.get("diagnostics", {}), **diagnostics},
             "provenance": [
                 *state.get("provenance", []),
@@ -167,7 +225,7 @@ class StrategicSwarmWorkflow:
         }
 
     def retrieve_related_situations(self, state: FaultlineState) -> FaultlineState:
-        cluster = state.get("selected_cluster")
+        cluster = self._coerce_optional(state.get("selected_cluster"), EventCluster)
         if cluster is None:
             return {
                 "related_situations": [],
@@ -191,14 +249,22 @@ class StrategicSwarmWorkflow:
         }
 
     def map_situation(self, state: FaultlineState) -> FaultlineState:
-        cluster = state.get("selected_cluster")
+        cluster = self._coerce_optional(state.get("selected_cluster"), EventCluster)
         if cluster is None:
             return {
                 "situation_snapshot": None,
                 "provenance": [*state.get("provenance", []), "Situation mapping skipped."],
             }
-        cluster_events = [item for item in state["normalized_events"] if item.cluster_id == cluster.cluster_id]
-        snapshot = self.mapper.map(cluster, cluster_events, state.get("related_situations", []))
+        cluster_events = [
+            item
+            for item in self._coerce_list(state["normalized_events"], SignalEvent)
+            if item.cluster_id == cluster.cluster_id
+        ]
+        snapshot = self.mapper.map(
+            cluster,
+            cluster_events,
+            self._coerce_list(state.get("related_situations", []), RelatedSituation),
+        )
         return {
             "situation_snapshot": snapshot,
             "provenance": [
@@ -208,8 +274,8 @@ class StrategicSwarmWorkflow:
         }
 
     def generate_predictions(self, state: FaultlineState) -> FaultlineState:
-        snapshot = state.get("situation_snapshot")
-        cluster = state.get("selected_cluster")
+        snapshot = self._coerce_optional(state.get("situation_snapshot"), SituationSnapshot)
+        cluster = self._coerce_optional(state.get("selected_cluster"), EventCluster)
         if snapshot is None or cluster is None:
             return {
                 "predictions": [],
@@ -220,7 +286,7 @@ class StrategicSwarmWorkflow:
         predictions, scenario_tree, stage_transition_warnings = self.prediction_engine.predict(
             snapshot,
             cluster,
-            state.get("calibration_signals", []),
+            self._coerce_list(state.get("calibration_signals", []), CalibrationSignal),
         )
         return {
             "predictions": predictions,
@@ -234,8 +300,8 @@ class StrategicSwarmWorkflow:
         }
 
     def map_market_implications(self, state: FaultlineState) -> FaultlineState:
-        snapshot = state.get("situation_snapshot")
-        cluster = state.get("selected_cluster")
+        snapshot = self._coerce_optional(state.get("situation_snapshot"), SituationSnapshot)
+        cluster = self._coerce_optional(state.get("selected_cluster"), EventCluster)
         if snapshot is None or cluster is None:
             return {
                 "market_implications": [],
@@ -243,9 +309,9 @@ class StrategicSwarmWorkflow:
             }
         implications = self.market_mapper.map(
             snapshot,
-            state.get("predictions", []),
+            self._coerce_list(state.get("predictions", []), Prediction),
             cluster,
-            state.get("calibration_signals", []),
+            self._coerce_list(state.get("calibration_signals", []), CalibrationSignal),
         )
         return {
             "market_implications": implications,
@@ -253,7 +319,7 @@ class StrategicSwarmWorkflow:
         }
 
     def generate_actions(self, state: FaultlineState) -> FaultlineState:
-        snapshot = state.get("situation_snapshot")
+        snapshot = self._coerce_optional(state.get("situation_snapshot"), SituationSnapshot)
         if snapshot is None:
             return {
                 "action_recommendations": [],
@@ -263,12 +329,12 @@ class StrategicSwarmWorkflow:
             }
         actions, exits, endangered_symbols = self.action_engine.generate(
             snapshot,
-            state.get("market_implications", []),
-            state.get("predictions", []),
-            state.get("calibration_signals", []),
-            state.get("portfolio_positions", []),
-            state.get("watchlist", []),
-            state.get("stage_transition_warnings", []),
+            self._coerce_list(state.get("market_implications", []), MarketImplication),
+            self._coerce_list(state.get("predictions", []), Prediction),
+            self._coerce_list(state.get("calibration_signals", []), CalibrationSignal),
+            self._coerce_list(state.get("portfolio_positions", []), PortfolioPosition),
+            self._coerce_list(state.get("watchlist", []), WatchlistEntry),
+            self._coerce_list(state.get("stage_transition_warnings", []), StageTransitionWarning),
             state.get("operator_policy_config"),
         )
         return {
@@ -279,40 +345,105 @@ class StrategicSwarmWorkflow:
         }
 
     def synthesize_report(self, state: FaultlineState) -> FaultlineState:
-        snapshot = state.get("situation_snapshot")
-        cluster = state.get("selected_cluster")
+        snapshot = self._coerce_optional(state.get("situation_snapshot"), SituationSnapshot)
+        cluster = self._coerce_optional(state.get("selected_cluster"), EventCluster)
+        diagnostics = self._report_diagnostics(state)
         if snapshot is None or cluster is None:
             report = self.report_builder.empty_report(state.get("provenance", []))
+            topic_prompt = state.get("topic_prompt")
+            research_brief = state.get("research_brief")
+            if topic_prompt is not None:
+                report.topic_prompt = (
+                    topic_prompt.topic if isinstance(topic_prompt, TopicPrompt) else topic_prompt.get("topic", "")
+                )
+            if research_brief is not None:
+                if not isinstance(research_brief, ResearchBrief):
+                    research_brief = ResearchBrief.model_validate(research_brief)
+                report.intake_assumptions = research_brief.assumptions
+                report.deep_dive_objective = self.report_builder.deep_dive_objective(research_brief)
+            report.retrieval_questions = state.get("retrieval_questions", [])
             return {
                 "final_report": report,
-                "diagnostics": {**state.get("diagnostics", {}), "publish_decision": report.publication_status},
+                "diagnostics": {**diagnostics, "publish_decision": report.publication_status},
             }
         report = self.report_builder.build(
             snapshot=snapshot,
             cluster=cluster,
-            related_situations=state.get("related_situations", []),
-            calibration_signals=state.get("calibration_signals", []),
-            predictions=state.get("predictions", []),
-            scenario_tree=state.get("scenario_tree", []),
-            stage_transition_warnings=state.get("stage_transition_warnings", []),
-            implications=state.get("market_implications", []),
-            actions=state.get("action_recommendations", []),
-            exits=state.get("exit_signals", []),
+            related_situations=self._coerce_list(state.get("related_situations", []), RelatedSituation),
+            calibration_signals=self._coerce_list(state.get("calibration_signals", []), CalibrationSignal),
+            predictions=self._coerce_list(state.get("predictions", []), Prediction),
+            scenario_tree=self._coerce_list(state.get("scenario_tree", []), ScenarioPath),
+            stage_transition_warnings=self._coerce_list(
+                state.get("stage_transition_warnings", []), StageTransitionWarning
+            ),
+            implications=self._coerce_list(state.get("market_implications", []), MarketImplication),
+            actions=self._coerce_list(state.get("action_recommendations", []), ActionRecommendation),
+            exits=self._coerce_list(state.get("exit_signals", []), ActionRecommendation),
             endangered_symbols=state.get("endangered_symbols", []),
             provenance=state.get("provenance", []),
+            topic_prompt=state.get("topic_prompt"),
+            research_brief=state.get("research_brief"),
+            retrieval_questions=state.get("retrieval_questions", []),
         )
         return {
             "final_report": report,
             "diagnostics": {
-                **state.get("diagnostics", {}),
+                **diagnostics,
                 "publish_decision": report.publication_status,
                 "stage": snapshot.stage.stage,
             },
         }
 
     def remember_situation(self, state: FaultlineState) -> FaultlineState:
-        snapshot = state.get("situation_snapshot")
+        snapshot = self._coerce_optional(state.get("situation_snapshot"), SituationSnapshot)
         if snapshot is not None:
             self.memory.remember(snapshot)
             self.store.save_situation_snapshot(snapshot)
         return {}
+
+    def _resolve_window(self, state: FaultlineState, *, lookback_minutes: int = 60) -> tuple[datetime, datetime]:
+        now = datetime.now(UTC)
+        start_at = (
+            datetime.fromisoformat(state["window_start"])
+            if state.get("window_start")
+            else now - timedelta(minutes=lookback_minutes)
+        )
+        end_at = datetime.fromisoformat(state["window_end"]) if state.get("window_end") else now
+        return start_at, end_at
+
+    def _coerce_brief(self, brief: ResearchBrief | dict[str, Any] | None) -> ResearchBrief | None:
+        if brief is None or isinstance(brief, ResearchBrief):
+            return brief
+        return ResearchBrief.model_validate(brief)
+
+    def _topic_story_key(self, brief: ResearchBrief | None) -> str:
+        if brief is None:
+            return "topic_chat"
+        seed = brief.normalized_topic or brief.original_topic
+        return "_".join(token for token in seed.lower().replace("/", " ").split() if token)[:80] or "topic_chat"
+
+    def _report_diagnostics(self, state: FaultlineState) -> dict[str, Any]:
+        topic_prompt = state.get("topic_prompt")
+        topic = (
+            topic_prompt.topic
+            if isinstance(topic_prompt, TopicPrompt)
+            else topic_prompt.get("topic", "")
+            if isinstance(topic_prompt, dict)
+            else ""
+        )
+        chat_session = state.get("chat_intake_session")
+        return {
+            **state.get("diagnostics", {}),
+            "topic_prompt": topic,
+            "topic_chat_turn_count": len(chat_session.turns) if chat_session is not None else 0,
+            "included_signal_count": len(state.get("included_signal_ids", [])),
+            "excluded_signal_count": len(state.get("excluded_signal_ids", [])),
+        }
+
+    def _coerce_optional(self, value: Any, model_class):
+        if value is None or isinstance(value, model_class):
+            return value
+        return model_class.model_validate(value)
+
+    def _coerce_list(self, values: list[Any], model_class) -> list[Any]:
+        return [item if isinstance(item, model_class) else model_class.model_validate(item) for item in values]

@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from faultline.graph.review import current_review_step as graph_current_review_step
+from faultline.graph.review import review_toc_rows as graph_review_toc_rows
 from faultline.graph.runner import StrategicSwarmRunner, default_goldset
 from faultline.utils.io import serialize_model
 
@@ -24,6 +26,8 @@ def summarize_final_state(final_state: dict[str, Any]) -> dict[str, Any]:
         "headline": report.get("headline"),
         "executive_summary": report.get("executive_summary"),
         "monitor_only_reason": report.get("monitor_only_reason"),
+        "topic_prompt": report.get("topic_prompt"),
+        "deep_dive_objective": report.get("deep_dive_objective"),
         "system_topology": report.get("system_topology"),
         "stage": report.get("stage"),
         "calibrated_conviction": report.get("calibrated_conviction"),
@@ -40,7 +44,39 @@ def summarize_final_state(final_state: dict[str, Any]) -> dict[str, Any]:
         "scenario_branch_count": len(report.get("scenario_tree") or []),
         "stage_warning_count": len(report.get("stage_transition_warnings") or []),
         "action_traceability_count": len(report.get("action_traceability") or []),
+        "retrieval_question_count": len(report.get("retrieval_questions") or []),
+        "intake_assumption_count": len(report.get("intake_assumptions") or []),
+        "topic_chat_turn_count": diagnostics.get("topic_chat_turn_count", 0),
+        "checkpoint_statuses": diagnostics.get("checkpoint_statuses", {}),
+        "approved_cluster_id": diagnostics.get("approved_cluster_id"),
+        "edited_retrieval_question_count": diagnostics.get("edited_retrieval_question_count", 0),
+        "included_signal_count": diagnostics.get("included_signal_count", 0),
+        "excluded_signal_count": diagnostics.get("excluded_signal_count", 0),
+        "stale_downstream_flags": diagnostics.get("stale_downstream_flags", {}),
     }
+
+
+def workspace_checkpoint_rows(workspace: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = []
+    for stage in workspace.get("stages", []):
+        checkpoint = workspace.get(f"{stage}_checkpoint", {})
+        rows.append(
+            {
+                "stage": stage,
+                "status": checkpoint.get("status", "not_started"),
+                "current": workspace.get("current_stage") == stage,
+            }
+        )
+    return rows
+
+
+def review_toc_rows(session: dict[str, Any]) -> list[dict[str, Any]]:
+    return graph_review_toc_rows(session)
+
+
+def current_review_step(session: dict[str, Any]) -> dict[str, Any] | None:
+    step = graph_current_review_step(session)
+    return step.model_dump(mode="json", warnings="none") if step is not None else None
 
 
 def load_outcome_markdown(run_dir: str | Path) -> str | None:
@@ -108,11 +144,16 @@ def run_and_summarize(
     end_at: datetime | None = None,
     lookback_minutes: int | None = None,
     run_id: str | None = None,
+    topic_session: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if mode == "demo":
         if not scenario:
             raise ValueError("Scenario is required for demo mode.")
         result = runner.run_demo(scenario)
+    elif mode == "topic_chat":
+        if not topic_session:
+            raise ValueError("Topic chat mode requires a prepared topic session.")
+        result = runner.run_topic_chat(topic_session)
     elif mode == "live":
         if not start_at or not end_at:
             raise ValueError("Live mode requires start_at and end_at.")

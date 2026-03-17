@@ -27,16 +27,20 @@ For each clustered situation, Faultline outputs:
 
 The production graph is in `src/faultline/graph/workflow.py`:
 
-1. `ingest_signals`
-2. `normalize_events`
-3. `retrieve_related_situations`
-4. `retrieve_calibration`
-5. `map_situation`
-6. `generate_predictions`
-7. `map_market_implications`
-8. `generate_actions`
-9. `synthesize_report`
-10. `remember_situation`
+1. `plan_retrieval`
+2. `ingest_signals`
+3. `normalize_events`
+4. `extract_evidence_claims`
+5. `retrieve_related_situations`
+6. `retrieve_calibration`
+7. `map_situation`
+8. `build_consequence_graph`
+9. `generate_predictions`
+10. `map_market_implications`
+11. `generate_actions`
+12. `collect_run_metrics`
+13. `synthesize_report`
+14. `remember_situation`
 
 ## Quickstart
 
@@ -67,6 +71,10 @@ faultline provider-health
 faultline run-latest --lookback-minutes 60
 faultline run-live --start 2026-03-08T10:00:00Z --end 2026-03-08T11:00:00Z
 ```
+
+Detailed live-run guide:
+
+- `docs/RUN_LIVE_GUIDE.md`
 
 ### Portfolio/watchlist-aware execution
 

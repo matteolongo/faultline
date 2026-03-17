@@ -5,35 +5,12 @@ import logging
 import os
 from typing import Any, TypeVar
 
-import httpx
+from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, ValidationError
 
 T = TypeVar("T", bound=BaseModel)
 
 logger = logging.getLogger(__name__)
-
-
-def _enforce_additional_properties(schema: dict[str, Any]) -> dict[str, Any]:
-    """Recursively enforce OpenAI structured output schema requirements:
-    - additionalProperties: false on every object
-    - required must list every key in properties (no optional fields)
-
-    Pydantic generates optional fields as missing from 'required'. OpenAI rejects this.
-    We set required = list(properties.keys()) on every object node.
-    """
-    if isinstance(schema, dict):
-        if schema.get("type") == "object" or "properties" in schema:
-            schema.setdefault("additionalProperties", False)
-            if "properties" in schema:
-                schema["required"] = list(schema["properties"].keys())
-        for value in schema.values():
-            if isinstance(value, dict):
-                _enforce_additional_properties(value)
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        _enforce_additional_properties(item)
-    return schema
 
 
 class StructuredReasoner:
@@ -55,56 +32,37 @@ class StructuredReasoner:
     ) -> tuple[T, dict[str, Any]]:
         if not self.enabled:
             return fallback, {"llm_used": False, "llm_status": "disabled"}
-        schema = _enforce_additional_properties(model_class.model_json_schema())
-        body = {
-            "model": self.model,
-            "input": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": json.dumps(user_payload, default=str)},
-            ],
-            "text": {
-                "format": {
-                    "type": "json_schema",
-                    "name": model_class.__name__,
-                    "schema": schema,
-                }
-            },
-        }
+
         try:  # pragma: no cover - live network not exercised in tests
-            response = httpx.post(
-                "https://api.openai.com/v1/responses",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=body,
-                timeout=30.0,
+            client = self._build_client().with_structured_output(model_class)
+            candidate = client.invoke(
+                [
+                    ("system", system_prompt),
+                    ("human", json.dumps(user_payload, default=str)),
+                ]
             )
-            response.raise_for_status()
-            payload = response.json()
-            content = payload.get("output_text")
-            if not content:
-                for item in payload.get("output", []):
-                    for piece in item.get("content", []):
-                        if piece.get("type") == "output_text":
-                            content = piece.get("text")
-                            break
-            if not content:
-                return fallback, {"llm_used": True, "llm_status": "empty_response"}
-            candidate = model_class.model_validate_json(content)
-            return candidate, {"llm_used": True, "llm_status": "ok"}
-        except (httpx.HTTPError, ValidationError, json.JSONDecodeError) as exc:
-            error_body: str | None = None
-            if isinstance(exc, httpx.HTTPStatusError):
-                error_body = exc.response.text[:1000]
-                logger.warning("OpenAI API %s: %s", exc.response.status_code, error_body)
-            else:
-                logger.warning("LLM call failed (%s): %s", type(exc).__name__, exc)
-            diag: dict[str, Any] = {
+            if isinstance(candidate, model_class):
+                return candidate, {"llm_used": True, "llm_status": "ok"}
+            return model_class.model_validate(candidate), {"llm_used": True, "llm_status": "ok"}
+        except (ValidationError, ValueError, TypeError) as exc:
+            logger.warning("Structured LLM validation failed (%s): %s", type(exc).__name__, exc)
+            return fallback, {
                 "llm_used": True,
                 "llm_status": "fallback",
                 "llm_error": str(exc),
             }
-            if error_body:
-                diag["llm_error_body"] = error_body
-            return fallback, diag
+        except Exception as exc:  # pragma: no cover - network/runtime failures
+            logger.warning("Structured LLM call failed (%s): %s", type(exc).__name__, exc)
+            return fallback, {
+                "llm_used": True,
+                "llm_status": "fallback",
+                "llm_error": str(exc),
+            }
+
+    def _build_client(self) -> ChatOpenAI:
+        return ChatOpenAI(
+            model=self.model,
+            api_key=self.api_key,
+            temperature=0,
+            timeout=30,
+        )

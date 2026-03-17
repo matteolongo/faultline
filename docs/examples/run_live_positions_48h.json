@@ -1,0 +1,23 @@
+[
+  {
+    "symbol": "XLE",
+    "direction": "long",
+    "quantity": 15,
+    "tags": ["energy", "oil", "shipping"],
+    "notes": "Energy exposure for Hormuz and Gulf infrastructure stress."
+  },
+  {
+    "symbol": "QQQ",
+    "direction": "long",
+    "quantity": 12,
+    "tags": ["ai", "platforms", "semis"],
+    "notes": "Broad technology exposure for model competition and repricing risk."
+  },
+  {
+    "symbol": "GLD",
+    "direction": "long",
+    "quantity": 5,
+    "tags": ["safe-haven", "macro"],
+    "notes": "Macro hedge if energy and war stress spill into rates and risk assets."
+  }
+]
