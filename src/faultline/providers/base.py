@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from time import sleep
 from typing import Any
 
 import httpx
@@ -60,17 +61,29 @@ class HTTPProvider(SignalProvider):
                 return response.json()
             except httpx.HTTPStatusError as exc:  # pragma: no cover
                 logger.warning(
-                    "HTTP %s from %s: %s",
+                    "HTTP %s from %s (attempt %d/%d): %s",
                     exc.response.status_code,
                     url,
+                    attempt,
+                    self.retries,
                     exc.response.text[:500],
                 )
                 last_error = exc
                 if attempt == self.retries:
                     break
+                retry_after = exc.response.headers.get("Retry-After")
+                try:
+                    retry_after_seconds = float(retry_after) if retry_after else 0.0
+                except ValueError:
+                    retry_after_seconds = 0.0
+                delay = max(self.backoff_seconds * attempt, retry_after_seconds)
+                if exc.response.status_code == 429:
+                    delay = max(delay, 5.0)
+                sleep(delay)
             except Exception as exc:  # pragma: no cover - exercised through provider tests
                 logger.warning("Request error (attempt %d/%d): %s", attempt, self.retries, exc)
                 last_error = exc
                 if attempt == self.retries:
                     break
+                sleep(self.backoff_seconds * attempt)
         raise ProviderError(str(last_error))

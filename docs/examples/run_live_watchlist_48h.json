@@ -1,0 +1,20 @@
+[
+  {
+    "symbol": "NVDA",
+    "bias": "positive",
+    "tags": ["enablers", "ai", "compute"],
+    "notes": "Watch for open-model and infrastructure demand spillover."
+  },
+  {
+    "symbol": "COIN",
+    "bias": "positive",
+    "tags": ["stablecoin", "payment-rails", "crypto"],
+    "notes": "Relevant if the BVNK / stablecoin rails theme broadens."
+  },
+  {
+    "symbol": "UUP",
+    "bias": "positive",
+    "tags": ["usd", "macro", "risk-off"],
+    "notes": "Dollar proxy if the window turns into a broader risk-off macro cluster."
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "implication_enter_threshold": 0.68,
+  "asymmetric_enter_threshold": 0.72,
+  "negative_avoid_threshold": 0.65,
+  "portfolio_trim_threshold": 0.58,
+  "portfolio_exit_threshold": 0.75,
+  "watchlist_enter_threshold": 0.7,
+  "watchlist_avoid_threshold": 0.65,
+  "stage_warning_watch_threshold": 0.6,
+  "stage_warning_trim_threshold": 0.72,
+  "stage_warning_exit_threshold": 0.82,
+  "timing_trim_threshold": 0.55,
+  "timing_exit_threshold": 0.72,
+  "high_urgency_threshold": 0.78,
+  "timing_critical_windows": ["immediate", "days to 2 weeks", "days to 4 weeks"],
+  "allow_conflicting_actions": false
+}

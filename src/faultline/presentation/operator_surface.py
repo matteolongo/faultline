@@ -76,7 +76,7 @@ def review_toc_rows(session: dict[str, Any]) -> list[dict[str, Any]]:
 
 def current_review_step(session: dict[str, Any]) -> dict[str, Any] | None:
     step = graph_current_review_step(session)
-    return step.model_dump(mode="json") if step is not None else None
+    return step.model_dump(mode="json", warnings="none") if step is not None else None
 
 
 def load_outcome_markdown(run_dir: str | Path) -> str | None:

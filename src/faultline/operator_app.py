@@ -23,8 +23,12 @@ def _parse_symbol_csv(value: str) -> list[dict[str, str]]:
     return [{"symbol": token.strip()} for token in value.split(",") if token.strip()]
 
 
+def _dump_json_model(model: Any) -> dict[str, Any]:
+    return model.model_dump(mode="json", warnings="none")
+
+
 def _store_review_session(st: Any, session: NodeReviewSession) -> None:
-    st.session_state["review_session"] = session.model_dump(mode="json")
+    st.session_state["review_session"] = _dump_json_model(session)
 
 
 def _load_review_session(st: Any) -> NodeReviewSession | None:
@@ -241,8 +245,8 @@ def _render_review_actions(
 def _render_review_session(st: Any, runner: StrategicSwarmRunner, session: NodeReviewSession, output_dir: str) -> None:
     session = runner.load_review_session(session)
     _store_review_session(st, session)
-    toc_rows = review_toc_rows(session.model_dump(mode="json"))
-    current_step = current_review_step(session.model_dump(mode="json"))
+    toc_rows = review_toc_rows(_dump_json_model(session))
+    current_step = current_review_step(_dump_json_model(session))
 
     if session.status == "completed":
         _render_completed_run(st, session, output_dir)
@@ -261,7 +265,7 @@ def _render_review_session(st: Any, runner: StrategicSwarmRunner, session: NodeR
 
     with right:
         for step in session.steps:
-            step_payload = step.model_dump(mode="json")
+            step_payload = _dump_json_model(step)
             expanded = step.status == "paused"
             label = (
                 f"{step.title} | {step.status} | "
@@ -331,7 +335,7 @@ def main() -> None:
                 portfolio_positions=_parse_symbol_csv(positions_raw),
                 watchlist=_parse_symbol_csv(watchlist_raw),
             )
-            st.session_state["topic_chat_session"] = session.model_dump(mode="json")
+            st.session_state["topic_chat_session"] = _dump_json_model(session)
         if st.sidebar.button("Reset Topic Chat"):
             st.session_state["topic_chat_session"] = None
 
@@ -355,7 +359,7 @@ def main() -> None:
             answer = st.text_input("Next answer", key="topic_chat_answer")
             if st.button("Submit Answer"):
                 updated = runner.continue_topic_chat(topic_session, answer)
-                st.session_state["topic_chat_session"] = updated.model_dump(mode="json")
+                st.session_state["topic_chat_session"] = _dump_json_model(updated)
                 st.rerun()
             return
         if st.button("Start Review Session", type="primary"):
